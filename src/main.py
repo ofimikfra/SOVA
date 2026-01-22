@@ -36,7 +36,7 @@ while True:
                 2
             )
 
-    cv2.imshow("Expression Detection (Screen)", frame)
+    cv2.imshow("Expression Detection", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
