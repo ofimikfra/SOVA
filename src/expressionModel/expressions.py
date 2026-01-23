@@ -1,4 +1,3 @@
-import cv2
 import numpy as np
 import mediapipe as mp
 
@@ -12,7 +11,7 @@ face_mesh = mp_face_mesh.FaceMesh(
     min_tracking_confidence=0.5
 )
 
-# Landmark indices
+
 LEFT_EYE = [33, 160, 158, 133, 153, 144]
 RIGHT_EYE = [362, 385, 387, 263, 373, 380]
 UPPER_LIP = 13
@@ -22,41 +21,87 @@ RIGHT_MOUTH = 291
 LEFT_BROW = 70
 RIGHT_BROW = 300
 
-def eyeRatio(eye):
-    A = np.linalg.norm(eye[1] - eye[0])
-    return A
 
+def dist(a, b):
+    return np.linalg.norm(a - b)
+
+#Expression Detection
 def detectExpression(landmarks, h, w):
-
     def get(i):
         return np.array([landmarks[i].x * w, landmarks[i].y * h])
 
-    mouth_open = np.linalg.norm(get(UPPER_LIP) - get(LOWER_LIP))
-    mouth_width = np.linalg.norm(get(LEFT_MOUTH) - get(RIGHT_MOUTH))
+    #Mouth
+    mouth_open = dist(get(UPPER_LIP), get(LOWER_LIP))
+    mouth_width = dist(get(LEFT_MOUTH), get(RIGHT_MOUTH))
     mouth_ratio = mouth_open / mouth_width
 
-    face_left = get(234)   # approximate left face jaw landmark
-    face_right = get(454)  # approximate right face jaw landmark
-    face_width = np.linalg.norm(face_left - face_right)
+    face_left = get(234)
+    face_right = get(454)
+    face_width = dist(face_left, face_right)
     normalized_mouth_width = mouth_width / face_width
 
-    # --------------------------- expression thresholds -------------------------- #
+    #Eyebrows
+    left_brow = get(LEFT_BROW)
+    right_brow = get(RIGHT_BROW)
+    left_eye_top = get(160)
+    right_eye_top = get(385)
 
-    # default
-    expression = "Neutral"
+    left_brow_dist = dist(left_brow, left_eye_top)
+    right_brow_dist = dist(right_brow, right_eye_top)
+    avg_brow_dist = (left_brow_dist + right_brow_dist) / 2
 
-    # mouth open
-    if mouth_ratio > 0.3:
+    if 'baseline_brow' not in globals():
+        global baseline_brow
+        baseline_brow = avg_brow_dist
+
+    eyebrows_raised = avg_brow_dist / baseline_brow > 1.2
+
+    #Eyes / Winks
+    def eye_openness(indices):
+        return dist(get(indices[1]), get(indices[5]))
+
+    left_eye_open = eye_openness(LEFT_EYE)
+    right_eye_open = eye_openness(RIGHT_EYE)
+
+    if 'baseline_eye' not in globals():
+        global baseline_eye
+        baseline_eye = (left_eye_open + right_eye_open) / 2
+
+    left_ratio = left_eye_open / baseline_eye
+    right_ratio = right_eye_open / baseline_eye
+
+    left_wink = left_ratio < 0.6 and right_ratio > 0.85
+    right_wink = right_ratio < 0.6 and left_ratio > 0.85
+
+    #Frown
+    left_corner = get(LEFT_MOUTH)
+    right_corner = get(RIGHT_MOUTH)
+    upper_lip = get(UPPER_LIP)
+    corner_avg_y = (left_corner[1] + right_corner[1]) / 2
+    lip_y = upper_lip[1]
+    frown_depth = corner_avg_y - lip_y
+    frowning = frown_depth > 4  # adjust threshold if needed
+
+    #Smiling
+    smiling = normalized_mouth_width > 0.4 and not frowning
+
+    #Mouth Open
+    mouth_opened = mouth_ratio > 0.3
+
+   
+    if left_wink:
+        expression = "Left Wink"
+    elif right_wink:
+        expression = "Right Wink"
+    elif mouth_opened:
         expression = "Mouth Open"
-
-    # smiling
-    elif normalized_mouth_width > 0.4: # how to fix for people with different sized mouths?
+    elif smiling:
         expression = "Smiling"
-
-    # frowning
-
-    # eyebrows raised
-
-    # wink?
+    elif frowning:
+        expression = "Frowning"
+    elif eyebrows_raised:
+        expression = "Eyebrows Raised"
+    else:
+        expression = "Neutral"
 
     return expression
