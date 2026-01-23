@@ -1,7 +1,7 @@
 import cv2
 from expressionModel.expressions import detectExpression, face_mesh
 
-# ----------------- Webcam setup ----------------- #
+#Webcam setup
 cap = cv2.VideoCapture(0)  # default webcam
 if not cap.isOpened():
     print("Error: Could not open webcam")
@@ -11,7 +11,7 @@ if not cap.isOpened():
 def flip_frame(frame):
     return cv2.flip(frame, 1)
 
-# ----------------- Main loop ----------------- #
+#Main loop
 while True:
     ret, frame = cap.read()
     if not ret:
@@ -27,8 +27,8 @@ while True:
         for face in results.multi_face_landmarks:
             expr = detectExpression(face.landmark, h, w)
 
-            # Get bounding box coordinates
-            x_coords = [lm.x * w for lm in face.landmark]
+            # Get bounding box coordinates   x_coords = 
+         [lm.x * w for lm in face.landmark]
             y_coords = [lm.y * h for lm in face.landmark]
             x_min, x_max = int(min(x_coords)), int(max(x_coords))
             y_min, y_max = int(min(y_coords)), int(max(y_coords))
