@@ -88,7 +88,8 @@ def detectExpression(landmarks, h, w):
     #Mouth Open
     mouth_opened = mouth_ratio > 0.3
 
-   
+    expression = "Neutral"
+
     if left_wink:
         expression = "Left Wink"
     elif right_wink:
@@ -101,7 +102,5 @@ def detectExpression(landmarks, h, w):
         expression = "Frowning"
     elif eyebrows_raised:
         expression = "Eyebrows Raised"
-    else:
-        expression = "Neutral"
 
     return expression
