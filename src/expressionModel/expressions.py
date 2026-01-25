@@ -88,6 +88,7 @@ def detectExpression(landmarks, h, w):
     #Mouth Open
     mouth_opened = mouth_ratio > 0.3
 
+
     expression = "Neutral"
 
     if left_wink:
@@ -104,3 +105,10 @@ def detectExpression(landmarks, h, w):
         expression = "Eyebrows Raised"
 
     return expression
+
+    '''
+    issues:
+    - expression detection affected by distance of face from camera
+    - expressions detected differ for people with different facial features
+    - some expressions get overruled by others, create hierarchy system?
+    '''
