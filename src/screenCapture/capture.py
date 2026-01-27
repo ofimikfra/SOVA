@@ -2,10 +2,6 @@ import mss
 import numpy as np
 import cv2
 
-_sct = mss.mss()              # create ONCE
-_monitor = _sct.monitors[1]   # primary screen
-
-
 def getScreenFrame():
     with mss.mss() as sct:
         monitor = sct.monitors[1]  # primary screen
