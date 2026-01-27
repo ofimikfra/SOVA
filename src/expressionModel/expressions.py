@@ -36,11 +36,11 @@ def extract_landmarks(frame):
     gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     h, w = gray.shape
 
-    # Example features (replace with YOUR exact training logic)
+
     mean_intensity = gray.mean()
     std_intensity = gray.std()
 
-    # Dummy placeholders — MUST match training
+
     features = np.array([
         mean_intensity,
         std_intensity,

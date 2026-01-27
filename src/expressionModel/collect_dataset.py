@@ -12,7 +12,8 @@ EXPRESSIONS = {
     ord('2'): "smile",
     ord('3'): "frown",
     ord('4'): "left_wink",
-    ord('5'): "right_wink"
+    ord('5'): "right_wink",
+    ord('6'): "eyebrows_raised"
 }
 
 MONITOR = {
