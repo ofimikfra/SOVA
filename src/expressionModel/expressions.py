@@ -33,30 +33,25 @@ sct = mss.mss()
 
 
 def extract_landmarks(frame):
-    rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = mp_face_mesh.process(rgb)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    h, w = gray.shape
 
-    if not results.multi_face_landmarks:
-        return None, None
+    # Example features (replace with YOUR exact training logic)
+    mean_intensity = gray.mean()
+    std_intensity = gray.std()
 
-    landmarks = []
-    h, w, _ = frame.shape
-    xs, ys = [], []
+    # Dummy placeholders — MUST match training
+    features = np.array([
+        mean_intensity,
+        std_intensity,
+        0, 0, 0, 0, 0, 0, 0, 0   # total = 10
+    ], dtype=np.float32)
 
-    for lm in results.multi_face_landmarks[0].landmark:
-        landmarks.extend([lm.x, lm.y, lm.z])
-        xs.append(int(lm.x * w))
-        ys.append(int(lm.y * h))
+    # Normalize (same as training!)
+    features = (features - features.mean()) / (features.std() + 1e-6)
 
-    landmarks = np.array(landmarks)
+    return features
 
-    landmarks = landmarks - landmarks.mean()
-    landmarks = landmarks / (landmarks.std() + 1e-6)
-
-    x1, y1 = min(xs), min(ys)
-    x2, y2 = max(xs), max(ys)
-
-    return landmarks, (x1, y1, x2, y2)
 cv2.namedWindow("Expression Recognition", cv2.WINDOW_NORMAL)
 
 while True:
