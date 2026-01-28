@@ -61,11 +61,6 @@ def detectExpression(landmarks, h, w):
         global baseline_brow
         baseline_brow = avg_brow_dist
 
-    # set baseline eye openness on first frame
-    if 'baseline_eye' not in globals():
-        global baseline_eye
-        baseline_eye = (left_eye_open + right_eye_open) / 2
-
     # eye openness measurements
     def eye_openness(indices):
         return dist(get(indices[1]), get(indices[5])) # vertical eye opening using landmark indices
@@ -73,7 +68,10 @@ def detectExpression(landmarks, h, w):
     left_eye_open = eye_openness(LEFT_EYE)
     right_eye_open = eye_openness(RIGHT_EYE)
 
-
+    # set baseline eye openness on first frame
+    if 'baseline_eye' not in globals():
+        global baseline_eye
+        baseline_eye = (left_eye_open + right_eye_open) / 2
 
     # detect if eyebrows are raised compared to baseline
     eyebrows_raised = avg_brow_dist / baseline_brow > 1.2
