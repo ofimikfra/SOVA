@@ -1,17 +1,31 @@
 import numpy as np
 import mediapipe as mp
+from mediapipe.tasks import python
+from mediapipe.tasks.python import vision
+import os
+import urllib.request
 
-# init mediapipe face mesh solution
-mp_face_mesh = mp.solutions.face_mesh
+# download face landmarker model if not present
+MODEL_PATH = "face_landmarker.task"
+MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
 
-# face mesh obj for detecting facial landmarks
-face_mesh = mp_face_mesh.FaceMesh(
-    static_image_mode=False, # process video stream
-    max_num_faces=5, # no. faces to detect 
-    refine_landmarks=True,
-    min_detection_confidence=0.5, # min confidence to detect face
-    min_tracking_confidence=0.5 # min confidence to track detected face
+if not os.path.exists(MODEL_PATH):
+    print(f"Downloading face landmarker model to {MODEL_PATH}...")
+    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
+    print("Model downloaded successfully!")
+
+# init mediapipe face landmarker solution (modern API)
+base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+options = vision.FaceLandmarkerOptions(
+    base_options=base_options,
+    output_face_blendshapes=False,
+    output_facial_transformation_matrixes=False,
+    num_faces=5,
+    min_face_detection_confidence=0.5,
+    min_face_presence_confidence=0.5,
+    min_tracking_confidence=0.5
 )
+face_mesh = vision.FaceLandmarker.create_from_options(options)
 
 # landmarks for facial features
 LEFT_EYE = [33, 160, 158, 133, 153, 144]

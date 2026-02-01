@@ -1,4 +1,4 @@
 mediapipe
-opencv-python 
-mss 
+opencv-python
+mss
 numpy
