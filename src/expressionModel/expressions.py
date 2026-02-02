@@ -5,17 +5,8 @@ from mediapipe.tasks.python import vision
 import os
 import urllib.request
 
-# download face landmarker model if not present
-MODEL_PATH = "face_landmarker.task"
-MODEL_URL = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task"
-
-if not os.path.exists(MODEL_PATH):
-    print(f"Downloading face landmarker model to {MODEL_PATH}...")
-    urllib.request.urlretrieve(MODEL_URL, MODEL_PATH)
-    print("Model downloaded successfully!")
-
-# init mediapipe face landmarker solution (modern API)
-base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+# init mediapipe face landmarker solution
+base_options = python.BaseOptions(model_asset_path="src/expressionModel/face_landmarker.task")
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     output_face_blendshapes=False,

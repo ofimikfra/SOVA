@@ -3,6 +3,8 @@ from screenCapture.capture import getScreenFrame
 from expressionModel.expressions import detectExpression, face_mesh
 import mediapipe as mp
 
+previous_expression = None  # track previous expression to detect changes
+
 while True:
 
     frame = getScreenFrame() # capture frame from screen
@@ -20,6 +22,11 @@ while True:
         for face_landmarks in results.face_landmarks: # for each face detected
 
             expr = detectExpression(face_landmarks, h, w) # detect expression
+
+            # only print when expression changes
+            if expr != previous_expression:
+                print("Detected Expression:", expr)
+                previous_expression = expr
     
             # draw rectangle around face
             x_coords = [lm.x * w for lm in face_landmarks]
