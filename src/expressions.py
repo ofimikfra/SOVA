@@ -2,11 +2,9 @@ import numpy as np
 import mediapipe as mp
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
-import os
-import urllib.request
 
 # init mediapipe face landmarker solution
-base_options = python.BaseOptions(model_asset_path="src/expressionModel/face_landmarker.task")
+base_options = python.BaseOptions(model_asset_path="src/face_landmarker.task")
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     output_face_blendshapes=False,
