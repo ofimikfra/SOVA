@@ -1,6 +1,4 @@
-mediapipe~=0.10.14
-opencv-python~=4.13.0.90
-mss~=10.1.0
-numpy~=2.4.1
-joblib~=1.5.3
-scikit-learn~=1.8.0
+mediapipe
+opencv-python
+mss
+numpy
