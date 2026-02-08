@@ -129,4 +129,7 @@ def detectExpression(landmarks, h, w):
     - expression detection affected by distance of face from camera
     - expressions detected differ for people with different facial features
     - some expressions get overruled by others, create hierarchy system?
+    
+    improvements:
+    - set time interval for expression changes to prevent rapid switching
     '''
