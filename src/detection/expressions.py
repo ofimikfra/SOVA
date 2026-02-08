@@ -4,7 +4,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # init mediapipe face landmarker solution
-base_options = python.BaseOptions(model_asset_path="src/face_landmarker.task")
+base_options = python.BaseOptions(model_asset_path="src/detection/models/face_landmarker.task")
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     output_face_blendshapes=False,
