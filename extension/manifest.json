@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "SOVA",
+  "version": "1.0",
+  "description": "Real-time facial expression and gesture description on Google Meet.",
+
+  "permissions": [
+    "storage",
+    "activeTab"
+  ],
+
+  "host_permissions": [
+    "https://meet.google.com/*",
+    "http://localhost:5000/*"
+  ],
+
+  "content_scripts": [
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "css": ["style.css"],
+      "run_at": "document_idle"
+    }
+  ],
+
+  "background": {
+    "service_worker": "background.js"
+  },
+
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "Meet Expression Detector"
+  }
+}
