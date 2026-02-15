@@ -5,6 +5,17 @@ import mediapipe as mp
 
 previous_expression = None  # track previous expression to detect changes
 
+# ----------------- Webcam setup ----------------- #
+cap = cv2.VideoCapture(0)  # default webcam
+if not cap.isOpened():
+    print("Error: Could not open webcam")
+    exit()
+
+# Flip image horizontally for correct left/right
+def flip_frame(frame):
+    return cv2.flip(frame, 1)
+
+# ----------------- Main loop ----------------- #
 while True:
 
     frame = getScreenFrame() # capture frame from screen
@@ -40,7 +51,7 @@ while True:
             cv2.putText(
                 frame,
                 expr,
-                text_position,
+                (x_min, y_max + 30),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,
                 (0, 255, 0),
@@ -54,4 +65,6 @@ while True:
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break
 
+# ----------------- Cleanup ----------------- #
+cap.release()
 cv2.destroyAllWindows()
