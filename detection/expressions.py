@@ -4,7 +4,7 @@ from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
 # init mediapipe face landmarker solution
-base_options = python.BaseOptions(model_asset_path="src/detection/models/face_landmarker.task")
+base_options = python.BaseOptions(model_asset_path="models/face_landmarker.task")
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
     output_face_blendshapes=False,
@@ -66,7 +66,7 @@ def detectExpression(landmarks, h, w):
 
     # eye openness measurements
     def eye_openness(indices):
-        return dist(get(indices[1]), get(indices[5])) # vertical eye opening using landmark indices
+        return dist(get(indices[1]), get(indices[5]))
 
     left_eye_open = eye_openness(LEFT_EYE)
     right_eye_open = eye_openness(RIGHT_EYE)
@@ -102,7 +102,7 @@ def detectExpression(landmarks, h, w):
     # mouth open detection
     mouth_opened = mouth_ratio > 0.3
 
-    
+    # ---------------------------------------------------------------------------- #
 
     # neutral expression by default
     expression = "Neutral"
