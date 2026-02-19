@@ -2,11 +2,12 @@
   "manifest_version": 3,
   "name": "SOVA",
   "version": "1.0",
-  "description": "Real-time facial expression and gesture description on Google Meet.",
+  "description": "Real-time facial expression and gesture description for Google Meet participants.",
 
   "permissions": [
     "storage",
-    "activeTab"
+    "activeTab",
+    "tabCapture"
   ],
 
   "host_permissions": [
@@ -29,6 +30,6 @@
 
   "action": {
     "default_popup": "popup.html",
-    "default_title": "Meet Expression Detector"
+    "default_title": "SOVA"
   }
 }
