@@ -1,6 +1,6 @@
 import cv2
-from detection.capture import getScreenFrame
-from detection.expressions import detectExpression, face_mesh
+from src.screen_capture import getScreenFrame
+from src.expressions import detectExpression, face_mesh
 import mediapipe as mp
 
 previous_expression = None  # track previous expression to detect changes
