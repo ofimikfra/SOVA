@@ -1,13 +1,13 @@
 import cv2
 from src.screen_capture import getScreenFrame
 from src.webcam_capture import getCameraFrame
-from src.expressions import detectExpression, face_mesh
+from models.expression import detectExpression, face_mesh
 from src.processor import processExpression
 import mediapipe as mp
 
 previous_expression = None  # track previous dominant expression to detect changes
 
-# prompt user to choose capture source
+# debugging
 print("Select capture source:")
 print("  [1] Screen capture")
 print("  [2] Webcam")
@@ -32,7 +32,7 @@ while True:
     frame = get_frame()  # capture frame from selected source
 
     if mirror:
-        frame = cv2.flip(frame, 1)  # flip horizontally for natural mirror view
+        frame = cv2.flip(frame, 1)  
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
 
@@ -45,18 +45,8 @@ while True:
 
         for face_landmarks in results.face_landmarks:
 
-            expr = detectExpression(face_landmarks, h, w)
-
-            # pass raw expression into processor; only returns a result every BUFFER_SIZE frames
-            dominant = processExpression(expr)
-
-            if dominant is not None and dominant != previous_expression:
-                print("Dominant Expression:", dominant)
-                previous_expression = dominant
-
-            # use the last known dominant expression for the overlay,
-            # falling back to the raw expression until the first window completes
-            display_expr = previous_expression if previous_expression is not None else expr
+            expr = detectExpression(face_landmarks, h, w) # get raw expression
+            dom_expr = processExpression(expr) # get dominant expression within time frame
 
             x_coords = [lm.x * w for lm in face_landmarks]
             y_coords = [lm.y * h for lm in face_landmarks]
@@ -66,7 +56,7 @@ while True:
 
             cv2.putText(
                 frame,
-                display_expr,
+                dom_expr,
                 (x_min, y_max + 25),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.9,
