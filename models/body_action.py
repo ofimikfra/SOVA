@@ -43,25 +43,17 @@ def _get_person_position(pose_landmarks) -> str:
 
 # API
 
-def detectBodyAction(frame) -> str:
-    """
-    Detect pose-based body actions from frame (BGR numpy array).
+def detectBodyAction(frame) -> tuple:
 
-    Priority order:
-      1. Leaving Frame
-      2. Looking Away
-      3. Person position (Left / Center / Right)
-
-    Returns a descriptive label string.
-    """
     rgb     = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = _pose.process(rgb)
     lm      = results.pose_landmarks
 
     if _detect_person_leaving(lm):
-        return "Leaving Frame"
+        return "Leaving Frame", 0.95
 
     if _detect_looking_away(lm):
-        return "Looking Away"
+        return "Looking Away", 0.80
 
-    return f"Person {_get_person_position(lm)}"
+    position = _get_person_position(lm)
+    return f"Person {position}", 0.90

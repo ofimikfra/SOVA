@@ -24,7 +24,7 @@ _hand_position_history: dict = {} # Per-hand position history used by wave detec
 
 try:
     from ultralytics import YOLO
-    _phone_detector = YOLO("yolov8n.pt")
+    _phone_detector = YOLO("models/yolov8n.pt")
     print("✅ YOLO phone detection enabled")
 except Exception as e:
     print(f"⚠️  YOLO unavailable, phone detection disabled: {e}")
@@ -147,13 +147,16 @@ def _classify_hand(hand_landmarks, hand_id: int) -> tuple:
 CONFIDENCE_THRESHOLD = 0.88
 
 
-def detectGesture(frame) -> str:
+def detectGesture(frame) -> tuple:
+
+    if detectPhone(frame):
+        return "Using Phone", 0.95
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = _hands.process(rgb)
 
     if not results.multi_hand_landmarks:
-        return "No Gesture"
+        return "No Gesture", 1.0
 
     best_gesture, best_conf = "No Gesture", 0.0
 
@@ -162,4 +165,4 @@ def detectGesture(frame) -> str:
         if conf >= CONFIDENCE_THRESHOLD and conf > best_conf:
             best_gesture, best_conf = gesture, conf
 
-    return best_gesture
+    return best_gesture, best_conf

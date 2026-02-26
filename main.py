@@ -3,10 +3,10 @@ import mediapipe as mp
 
 from src.screen_capture import getScreenFrame
 from src.webcam_capture import getCameraFrame
-from models.expression import detectExpression, face_mesh
 from models.gesture_v4 import detectGesture
 from models.body_action import detectBodyAction
-from src.processor import processExpression, processGesture, processBodyAction
+from models.expression import detectExpression, face_mesh
+from src.processor import processExpression, processGesture, processBodyAction, flushAll
 
 
 print("Select capture source:")
@@ -40,45 +40,42 @@ while True:
     if mirror:
         frame = cv2.flip(frame, 1)
 
-    # expression detection
-    rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
-    results = face_mesh.detect(image)
-
     h, w, _ = frame.shape
+
+    # Expression detection
+    rgb     = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    image   = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    results = face_mesh.detect(image)
 
     if results.face_landmarks:
         for face_landmarks in results.face_landmarks:
-            raw_expr, expr_conf = detectExpression(face_landmarks, h, w)  # unpack tuple
-            dominant_expr = processExpression(raw_expr, expr_conf)        # pass confidence
-            if dominant_expr is not None:
-                if dominant_expr != display_expression:
-                    print(f"Expression: {dominant_expr}")
-                display_expression = dominant_expr
+            raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
+            processExpression(raw_expr, expr_conf)
 
+            # Draw face bounding box
             xs = [lm.x * w for lm in face_landmarks]
             ys = [lm.y * h for lm in face_landmarks]
-            x_min, x_max = int(min(xs)), int(max(xs))
-            y_min, y_max = int(min(ys)), int(max(ys))
-            cv2.rectangle(frame, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
+            cv2.rectangle(frame,
+                          (int(min(xs)), int(min(ys))),
+                          (int(max(xs)), int(max(ys))),
+                          (0, 255, 0), 2)
+    else:
+        processExpression("Neutral", 1.0)
 
-    # gesture detection
-    raw_gest = detectGesture(frame)
-    dominant_gest = processGesture(raw_gest)
-    if dominant_gest is not None:
-        if dominant_gest != display_gesture:
-            print(f"Gesture:    {dominant_gest}")
-        display_gesture = dominant_gest
+    # Gesture detection
+    raw_gest, gest_conf = detectGesture(frame)
+    processGesture(raw_gest, gest_conf)
 
     # Body action detection
-    raw_action      = detectBodyAction(frame)
-    dominant_action = processBodyAction(raw_action)
-    if dominant_action is not None:
-        if dominant_action != display_action:
-            print(f"Action:     {dominant_action}")
-        display_action = dominant_action
+    raw_action, action_conf = detectBodyAction(frame)
+    processBodyAction(raw_action, action_conf)
 
-    # overlay text
+    # Flush all channels together every 30s
+    flush_result = flushAll()
+    if flush_result is not None:
+        display_expression, display_gesture, display_action = flush_result
+
+    # overlay
     overlay_lines = [
         f"Expression: {display_expression}",
         f"Gesture:    {display_gesture}",
@@ -91,6 +88,8 @@ while True:
             cv2.FONT_HERSHEY_SIMPLEX,
             0.9, (0, 255, 0), 2, cv2.LINE_AA,
         )
+
+    cv2.imshow("SOVA", frame)
 
     if cv2.waitKey(1) & 0xFF == ord("q"):
         break

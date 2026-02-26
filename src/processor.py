@@ -1,87 +1,99 @@
-from collections import Counter
+import time
+from collections import defaultdict
 
-BUFFER_SIZE = 30  # frames to buffer before determining dominant result
+INTERVAL = 5.0  # seconds
 
-# expression buffer
-expr_buffer = []
-expr_frame_count = 0
+_next_flush_time = time.time() + INTERVAL
 
-# gesture buffer
-gest_buffer = []
-gest_frame_count = 0
-
-# body action buffer
-action_buffer = []
-action_frame_count = 0
+_expr_buffer   = []
+_gest_buffer   = []
+_action_buffer = []
 
 
-# expression processing
+# ------------------------------------ API ----------------------------------- #
 
 def processExpression(expression: str, confidence: float = 1.0):
-    global expr_frame_count
-
-    expr_buffer.append(expression)  # confidence ignored for now, just buffer the label
-    expr_frame_count += 1
-
-    if expr_frame_count >= BUFFER_SIZE:
-        dominant = getDominant(expr_buffer, neutral="Neutral")
-        expr_buffer.clear()
-        expr_frame_count = 0
-        return dominant
-
-    return None
+    """Just accumulates — does not flush."""
+    _expr_buffer.append((expression, confidence))
 
 
-# gesture processing
-
-def processGesture(gesture: str):
-    """
-    Buffer gesture for BUFFER_SIZE frames, then return the dominant one.
-    Returns None while still buffering.
-    """
-    global gest_frame_count
-
-    gest_buffer.append(gesture)
-    gest_frame_count += 1
-
-    if gest_frame_count >= BUFFER_SIZE:
-        dominant = getDominant(gest_buffer, neutral="No Gesture")
-        gest_buffer.clear()
-        gest_frame_count = 0
-        return dominant
-
-    return None
-
-# body action processing
-
-def processBodyAction(action: str):
-    global action_frame_count
-    action_buffer.append(action)
-    action_frame_count += 1
-    if action_frame_count >= BUFFER_SIZE:
-        dominant = getDominant(action_buffer, neutral="Person Center")
-        action_buffer.clear()
-        action_frame_count = 0
-        return dominant
-    return None
+def processGesture(gesture: str, confidence: float = 1.0):
+    """Just accumulates — does not flush."""
+    _gest_buffer.append((gesture, confidence))
 
 
-# helper for getting dominant
-# Return the most common label in buffer.
-# If the neutral label makes up >60% of frames, return the top non-neutral label instead
+def processBodyAction(action: str, confidence: float = 1.0):
+    """Just accumulates — does not flush."""
+    _action_buffer.append((action, confidence))
 
-def getDominant(buffer: list, neutral: str) -> str:
+# ----------------------------- helper functions ----------------------------- #
     
+# returns dominant expression, gesture, action after interval -> flushes channels
+
+def flushAll() -> tuple | None:
+    """
+    Call once per frame. Returns (expression, gesture, action) when the
+    30-second interval has elapsed, otherwise returns None.
+    All three channels always flush together.
+    """
+    global _next_flush_time
+
+    if time.time() < _next_flush_time:
+        return None
+
+    expression = _getDominant(_expr_buffer,   neutral="Neutral",       label="EXPRESSION")
+    gesture    = _getDominant(_gest_buffer,    neutral="No Gesture",    label="GESTURE")
+    action     = _getDominant(_action_buffer,  neutral="Person Center", label="ACTION")
+
+    _expr_buffer.clear()
+    _gest_buffer.clear()
+    _action_buffer.clear()
+
+    _next_flush_time = time.time() + INTERVAL
+
+    # debugging
+    print(f"\n{'='*50}")
+    print(f"[FLUSH] Results after {INTERVAL:.0f}s interval:")
+    print(f"  Expression : {expression}")
+    print(f"  Gesture    : {gesture}")
+    print(f"  Action     : {action}")
+    print(f"{'='*50}\n")
+
+    return expression, gesture, action
+
+
+# calculate confidence score of each detected expression + no. detections -> analyze weightage -> output dominant 
+
+def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
     if not buffer:
+        print(f"  [{label}] Buffer empty → {neutral}")
         return neutral
 
-    counts = Counter(buffer)
-    most_common = counts.most_common()
-    total = len(buffer)
+    scores = defaultdict(float)
+    counts = defaultdict(int)
 
-    if most_common[0][0] == neutral and most_common[0][1] / total > 0.6:
-        non_neutral = [(label, n) for label, n in most_common if label != neutral]
-        if non_neutral:
-            return non_neutral[0][0]
+    for lbl, conf in buffer:
+        scores[lbl] += conf
+        counts[lbl]  += 1
 
-    return most_common[0][0]
+    non_neutral = {k: v for k, v in scores.items() if k != neutral}
+
+    if non_neutral:
+        top            = max(non_neutral, key=non_neutral.get)
+        top_score      = non_neutral[top]
+        neutral_score  = scores.get(neutral, 0.0)
+
+        if neutral_score >= top_score:
+            if top_score >= 3.0:
+                return top
+            return neutral
+
+    result = max(scores, key=scores.get)
+    return result
+
+'''
+TODO: create hierarchy of expressions 
+      left wink = right wink < mouth open < eyebrows raised < smiling < neutral
+
+TODO: detect multiple faces w/ gestures & body actions linked to faces 
+'''
