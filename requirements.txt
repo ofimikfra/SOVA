@@ -4,3 +4,4 @@ mss
 numpy
 flask
 flask-cors
+pyttsx3
