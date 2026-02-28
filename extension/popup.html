@@ -1,37 +1,82 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>SOVA</title>
-  <link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SOVA Menu</title>
+    <style>
+        /* 1. The Container: This centers everything on the screen */
+        body {
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center; /* Horizontal center */
+            align-items: center;     /* Vertical center */
+            min-height: 100vh;      /* Full height of the browser */
+            background-color: #add8e6; /* Light blue background from your image */
+            font-family: Arial, sans-serif;
+        }
+
+        /* 2. The Menu Stack */
+        .menu-container {
+            text-align: center;
+            width: 100%;
+            max-width: 400px; /* Limits width on desktop */
+            padding: 20px;
+        }
+
+        .logo {
+            width: 80px;
+            margin-bottom: 10px;
+        }
+
+        h1 {
+            font-size: 3rem;
+            margin-top: 0;
+            margin-bottom: 30px;
+            letter-spacing: 2px;
+            font-weight: bold;
+        }
+
+        /* 3. The Buttons */
+        .button-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 15px; /* Space between buttons */
+        }
+
+        .btn {
+            background-color: #1a6d7a; /* Teal color from image */
+            color: white;
+            border: none;
+            padding: 20px;
+            border-radius: 12px;
+            font-size: 1.2rem;
+            cursor: pointer;
+            transition: transform 0.2s, background-color 0.2s;
+            text-decoration: none;
+        }
+
+        .btn:hover {
+            background-color: #145661;
+            transform: scale(1.02);
+        }
+    </style>
 </head>
 <body>
 
-  <div class="container">
-    <div class="brand-section">
-      <img src="logo.png" alt="SOVA Logo" class="logo">
-      <h1>SOVA</h1>
+    <div class="menu-container">
+        <img src="logo.png" alt="Sova Logo"  class="logo">
+
+        <h1>SOVA</h1>
+
+        <div class="button-stack">
+            <button class="btn">Start Call Assistance</button>
+            <button class="btn">Language Options</button>
+            <button class="btn">Settings</button>
+            <button class="btn">Tutorial</button>
+        </div>
     </div>
-    <button id="startBtn" class="btn primary">
-      Start Call Assistance
-    </button>
-    <button id="languageBtn" class="btn">
-      Language Options
-    </button>
-    <button id="settingsBtn" class="btn">
-      Settings
-    </button>
-    <button id="tutorialBtn" class="btn">
-      Tutorial
-    </button>
-    <div class="keyboard-controls">
-      <h3>Keyboard Controls</h3>
-      <p><strong>Arrow keys</strong> to navigate</p>
-      <p><strong>ENTER</strong> to select option</p>
-      <p><strong>ESC</strong> to go back</p>
-      <p><strong>CTRL+TAB</strong> to toggle panel</p>
-    </div>
-  </div>
-  <script src="popup.js"></script>
+
 </body>
 </html>
