@@ -1,9 +1,7 @@
 import cv2
 import mediapipe as mp
 import threading
-import numpy as np
-
-# Importing your custom modules
+import time
 from src.screen_capture import getScreenFrame
 from src.webcam_capture import getCameraFrame
 from models.expression import detectExpression, face_mesh
@@ -12,12 +10,10 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 
-
+# threading wrapper
+def voice_worker(text):
+    speak(text)
 def run_system(source="webcam"):
-    """
-    The core engine. 'source' can be 'webcam' or 'screen'.
-    Triggered by your Flask server via the Chrome Extension.
-    """
 
     # Selection logic based on the Extension's request
     if source == "screen":
@@ -38,7 +34,8 @@ def run_system(source="webcam"):
 
     while True:
         frame = get_frame()
-        if frame is None: continue
+        if frame is None:
+            continue
 
         if mirror:
             frame = cv2.flip(frame, 1)
@@ -100,5 +97,4 @@ def run_system(source="webcam"):
 
 
 if __name__ == "__main__":
-    # Default behavior if run manually
     run_system(source="webcam")
