@@ -1,50 +1,69 @@
 body {
-  margin: 0;
-  font-family: Arial, sans-serif;
-  background-color: #A8D0D6;
-  width: 360px;
-  padding: 15px;
-  box-sizing: border-box;
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #A8D0D6;
+    width: 320px;
+    padding: 20px;
+    box-sizing: border-box;
 }
 
-.container {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.brand-section {
-  text-align: center;
+.menu-container {
+    text-align: center;
 }
 
 .logo {
-  width: 80px;
+    width: 70px;
+    height: auto;
+    margin-bottom: 5px;
 }
 
 h1 {
-  margin: 5px 0 10px;
+    margin: 0 0 15px 0;
+    color: #184A4F;
+    font-size: 24px;
+    letter-spacing: 1px;
+}
+
+.button-stack, .button-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.volume-container {
+    margin: 20px 0;
+    font-size: 13px;
+    color: #184A4F;
+    font-weight: bold;
+}
+
+#volume-slider {
+    width: 100%;
+    cursor: pointer;
 }
 
 .btn {
-  padding: 15px;
-  font-size: 16px;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  background-color: #168C9E;
-  color: white;
-  transition: 0.2s;
+    padding: 12px;
+    font-size: 14px;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    background-color: #168C9E;
+    color: white;
+    font-weight: 500;
+    transition: background 0.3s ease;
 }
 
 .btn:hover {
-  opacity: 0.9;
+    filter: brightness(1.1);
 }
 
 .primary {
-  background-color: #184A4F;
+    background-color: #184A4F;
+    margin-top: 10px;
 }
 
-.keyboard-controls {
-  font-size: 12px;
-  margin-top: 10px;
+.secondary {
+    background-color: #627d80;
 }
