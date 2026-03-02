@@ -11,10 +11,17 @@ from src.processor import processExpression, processGesture, processBodyAction, 
 from src.tts_engine import speak
 
 
-# ... [Keep your imports the same] ...
-
 def run_system(callback=None, source="webcam"):
-    # ... [Keep source selection logic the same] ...
+
+    # Selection logic based on the Extension's request
+    if source == "screen":
+        get_frame = getScreenFrame
+        mirror = False
+        print("[SOVA] Monitoring Screen...")
+    else:
+        get_frame = getCameraFrame
+        mirror = True
+        print("[SOVA] Monitoring Webcam...")
 
     # State variables
     display_expr = "Neutral"
@@ -43,7 +50,11 @@ def run_system(callback=None, source="webcam"):
         if results.face_landmarks:
             for face_landmarks in results.face_landmarks:
                 raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
-                # ... [Keep face drawing code] ...
+
+                # Draw Box around face
+                xs = [lm.x * w for lm in face_landmarks]
+                ys = [lm.y * h for lm in face_landmarks]
+                cv2.rectangle(frame, (int(min(xs)), int(min(ys))), (int(max(xs)), int(max(ys))), (0, 255, 0), 2)
 
         # 2. GESTURES & BODY ACTIONS
         raw_gest, gest_conf = detectGesture(frame)
@@ -61,7 +72,7 @@ def run_system(callback=None, source="webcam"):
 
             # 2. ADD THIS: Check for the Toggle Gesture
             # If the stable gesture is a Thumb Up, flip the visibility state
-            if gest == "Thumb_Up":
+            if gest == "Thumbs Up":
                 dashboard_visible = not dashboard_visible
                 print(f"[SOVA] Gesture Toggle: Dashboard is now {'VISIBLE' if dashboard_visible else 'HIDDEN'}")
 
@@ -73,14 +84,11 @@ def run_system(callback=None, source="webcam"):
             # Run TTS
             threading.Thread(target=speak, args=(f"Detected {expr}",), daemon=True).start()
 
-            # Update display strings
-            display_expr, display_gest, display_act = expr, gest, act
-
         # 5. VISUAL OVERLAY (Keep this the same)
         overlay_lines = [
-            f"Expression: {display_expr}",
-            f"Gesture:    {display_gest}",
-            f"Action:     {display_act}",
+            f"Expression: {expr}",
+            f"Gesture:    {gest}",
+            f"Action:     {act}",
             f"Dashboard:  {'ON' if dashboard_visible else 'OFF'}"  # Added for feedback
         ]
 
@@ -89,7 +97,7 @@ def run_system(callback=None, source="webcam"):
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
         # Show the processed feed
-        cv2.imshow("SOVA - Assistance Engine", frame)
+        cv2.imshow("SOVA", frame)
 
         # 'q' to quit
         if cv2.waitKey(1) & 0xFF == ord('q'):

@@ -52,7 +52,7 @@ h1 {
     background-color: #168C9E;
     color: white;
     font-weight: 500;
-    transition: background 0.3s ease;
+    transition: background-color 0.3s ease;
 }
 
 .btn:hover {

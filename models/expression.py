@@ -13,7 +13,6 @@ MODEL_PATH = os.path.join(CURRENT_DIR, 'face_landmarker.task')
 
 if not os.path.exists(MODEL_PATH):
     print(f"CRITICAL ERROR: Could not find model at {MODEL_PATH}")
-    # This will tell you EXACTLY where it is looking in the console
 else:
     print(f"SUCCESS: Model found at {MODEL_PATH}")
 

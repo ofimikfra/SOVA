@@ -3,20 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOVA Menu</title>
-    <script>
-  document.querySelector('.primary').onclick = () => {
-    fetch('http://127.0.0.1:5000/start')
-      .then(response => response.json())
-      .then(data => {
-        console.log("Python script triggered!");
-        alert("SOVA Assistance Starting...");
-      })
-      .catch(err => alert("Make sure your Python server is running!"));
-  };
-    </script>
+    <link rel="stylesheet" href="styles.css">
+    <title>SOVA</title>
 </head>
 <body>
+    <script src="popup.js"></script>
 
     <div class="menu-container">
         <img src="logo.png" alt="Sova Logo"  class="logo">
@@ -38,18 +29,5 @@
         <button id="start-btn" class="btn primary">Start SOVA</button>
         <button id="toggle-btn" class="btn secondary">Toggle Dashboard</button>
     </div>
-
-    <script>
-        // Manual Toggle for the UI
-        document.getElementById('toggle-btn').addEventListener('click', () => {
-            fetch('http://127.0.0.1:5000/manual_toggle');
-        });
-
-        // Existing Start Code
-        document.getElementById('start-btn').addEventListener('click', () => {
-            fetch('http://127.0.0.1:5000/start');
-         });
-    </script>
-
 </body>
 </html>

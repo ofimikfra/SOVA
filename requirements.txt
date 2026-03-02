@@ -6,4 +6,3 @@ flask
 flask-cors
 pyttsx3
 ultralytics
-ultralytics.YOLO

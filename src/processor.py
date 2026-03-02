@@ -13,17 +13,14 @@ _action_buffer = []
 # ------------------------------------ API ----------------------------------- #
 
 def processExpression(expression: str, confidence: float = 1.0):
-    """Just accumulates — does not flush."""
     _expr_buffer.append((expression, confidence))
 
 
 def processGesture(gesture: str, confidence: float = 1.0):
-    """Just accumulates — does not flush."""
     _gest_buffer.append((gesture, confidence))
 
 
 def processBodyAction(action: str, confidence: float = 1.0):
-    """Just accumulates — does not flush."""
     _action_buffer.append((action, confidence))
 
 # ----------------------------- helper functions ----------------------------- #
@@ -74,7 +71,7 @@ def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
 
     for lbl, conf in buffer:
         scores[lbl] += conf
-        counts[lbl]  += 1
+        counts[lbl] += 1
 
     non_neutral = {k: v for k, v in scores.items() if k != neutral}
 
