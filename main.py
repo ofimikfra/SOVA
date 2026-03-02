@@ -13,7 +13,7 @@ from src.tts_engine import speak
 # threading wrapper
 def voice_worker(text):
     speak(text)
-def run_system(source="webcam"):
+def run_system(callback=None, source="webcam"):
 
     # Selection logic based on the Extension's request
     if source == "screen":
@@ -69,12 +69,15 @@ def run_system(source="webcam"):
         # 4. THE FLUSH (Triggered every 5 seconds)
         stable_results = flushAll()
         if stable_results:
-            display_expr, display_gest, display_act = stable_results
+            expr, gest, act = stable_results
+            voice_text = f"Detected {expr}"
 
-            # VOICE FEEDBACK: Run in a separate thread so the camera doesn't lag
-            text_to_say = f"Status update: {display_expr}. {display_gest}."
-            threading.Thread(target=speak, args=(text_to_say,), daemon=True).start()
+            # Update the App.py state so the Chrome Extension sees it!
+            if callback:
+                callback(expr, gest, act, voice_text)
 
+            # Run TTS
+            threading.Thread(target=speak, args=(voice_text,), daemon=True).start()
         # 5. VISUAL OVERLAY
         overlay_lines = [
             f"Expression: {display_expr}",

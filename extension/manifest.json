@@ -9,6 +9,12 @@
     "activeTab",
     "tabCapture"
   ],
+  "web_accessible_resources": [
+  {
+    "resources": ["logo.png"],
+    "matches": ["https://meet.google.com/*"]
+  }
+  ],
 
   "host_permissions": [
     "https://meet.google.com/*",
