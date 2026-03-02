@@ -32,7 +32,6 @@ def start_sova():
     return jsonify({"status": "Already Running"}), 200
 @app.route('/get_status', methods=['GET'])
 def get_status():
-    """The Chrome Extension will call this every 1 second to update the dashboard."""
     return jsonify(sova_state), 200
 
 
