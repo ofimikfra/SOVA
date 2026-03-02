@@ -53,7 +53,9 @@ def update_state_callback(expr, gest, act, tts_text, toggle_ui=True):
     if tts_text:
         sova_state["tts_history"].insert(0, tts_text)
         sova_state["tts_history"] = sova_state["tts_history"][:5]
-
+@app.route('/get_status')
+def get_status():
+    return jsonify(sova_state)
 if __name__ == '__main__':
     print("SOVA Backend running on http://127.0.0.1:5000")
     app.run(port=5000, debug=False, threaded=True)

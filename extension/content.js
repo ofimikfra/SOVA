@@ -79,9 +79,12 @@ chrome.runtime.onMessage.addListener((message) => {
     // --- TOGGLE VISIBILITY ---
     // If show_dashboard is false, we add the hidden class
     if (data.show_dashboard === false) {
-        dashboardElement.classList.add('dashboard-hidden');
+        dashboard.style.opacity = "0";
+      dashboard.style.pointerEvents = "none";
     } else {
-        dashboardElement.classList.remove('dashboard-hidden');
+      // Show it
+      dashboard.style.opacity = "1";
+      dashboard.style.pointerEvents = "auto";
     }
 
     // --- UPDATE VALUES ---
