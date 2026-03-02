@@ -10,32 +10,25 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 
-# threading wrapper
-def voice_worker(text):
-    speak(text)
+
+# ... [Keep your imports the same] ...
+
 def run_system(callback=None, source="webcam"):
+    # ... [Keep source selection logic the same] ...
 
-    # Selection logic based on the Extension's request
-    if source == "screen":
-        get_frame = getScreenFrame
-        mirror = False
-        print("[SOVA] Monitoring Screen...")
-    else:
-        get_frame = getCameraFrame
-        mirror = True
-        print("[SOVA] Monitoring Webcam...")
-
-    # State variables for the on-screen display
+    # State variables
     display_expr = "Neutral"
     display_gest = "No Gesture"
     display_act = "Person Center"
+
+    # 1. ADD THIS: Track if dashboard should be shown
+    dashboard_visible = True
 
     print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
 
     while True:
         frame = get_frame()
-        if frame is None:
-            continue
+        if frame is None: continue
 
         if mirror:
             frame = cv2.flip(frame, 1)
@@ -47,21 +40,16 @@ def run_system(callback=None, source="webcam"):
         # 1. FACIAL EXPRESSIONS
         results = face_mesh.detect(image)
         raw_expr, expr_conf = "Neutral", 1.0
-
         if results.face_landmarks:
             for face_landmarks in results.face_landmarks:
                 raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
-
-                # Draw Box around face
-                xs = [lm.x * w for lm in face_landmarks]
-                ys = [lm.y * h for lm in face_landmarks]
-                cv2.rectangle(frame, (int(min(xs)), int(min(ys))), (int(max(xs)), int(max(ys))), (0, 255, 0), 2)
+                # ... [Keep face drawing code] ...
 
         # 2. GESTURES & BODY ACTIONS
         raw_gest, gest_conf = detectGesture(frame)
         raw_action, action_conf = detectBodyAction(frame)
 
-        # 3. FEED THE PROCESSOR (Buffer)
+        # 3. FEED THE PROCESSOR
         processExpression(raw_expr, expr_conf)
         processGesture(raw_gest, gest_conf)
         processBodyAction(raw_action, action_conf)
@@ -70,19 +58,30 @@ def run_system(callback=None, source="webcam"):
         stable_results = flushAll()
         if stable_results:
             expr, gest, act = stable_results
-            voice_text = f"Detected {expr}"
 
-            # Update the App.py state so the Chrome Extension sees it!
+            # 2. ADD THIS: Check for the Toggle Gesture
+            # If the stable gesture is a Thumb Up, flip the visibility state
+            if gest == "Thumb_Up":
+                dashboard_visible = not dashboard_visible
+                print(f"[SOVA] Gesture Toggle: Dashboard is now {'VISIBLE' if dashboard_visible else 'HIDDEN'}")
+
+            # 3. UPDATE THE CALLBACK: Pass 'dashboard_visible' to app.py
             if callback:
-                callback(expr, gest, act, voice_text)
+                # We update the callback signature to include the visibility state
+                callback(expr, gest, act, f"Detected {expr}", toggle_ui=dashboard_visible)
 
             # Run TTS
-            threading.Thread(target=speak, args=(voice_text,), daemon=True).start()
-        # 5. VISUAL OVERLAY
+            threading.Thread(target=speak, args=(f"Detected {expr}",), daemon=True).start()
+
+            # Update display strings
+            display_expr, display_gest, display_act = expr, gest, act
+
+        # 5. VISUAL OVERLAY (Keep this the same)
         overlay_lines = [
             f"Expression: {display_expr}",
             f"Gesture:    {display_gest}",
             f"Action:     {display_act}",
+            f"Dashboard:  {'ON' if dashboard_visible else 'OFF'}"  # Added for feedback
         ]
 
         for i, line in enumerate(overlay_lines):

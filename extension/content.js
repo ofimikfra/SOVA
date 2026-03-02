@@ -4,7 +4,7 @@ document.body.appendChild(host);
 
 const shadow = host.attachShadow({ mode: 'open' });
 
-// 3. Create the Dashboard structure
+// 1. Create the Dashboard structure
 const dashboard = document.createElement('div');
 dashboard.id = 'sova-dashboard';
 dashboard.innerHTML = `
@@ -24,17 +24,40 @@ dashboard.innerHTML = `
   </div>
   <div class="history-container">
     <label>Last Voice Output</label>
-    <div id="tts-history" class="history-list"></div>
+    <div id="tts-history" class="history-list">Waiting for detection...</div>
   </div>
 `;
+
+// 2. Updated Styles with Visibility Support
 const style = document.createElement('style');
 style.textContent = `
   #sova-dashboard {
-    position: fixed; top: 20px; right: 20px; width: 280px;
-    background: #1a6d7a; color: white; border-radius: 12px;
-    padding: 15px; z-index: 999999; font-family: 'Segoe UI', Tahoma, sans-serif;
-    box-shadow: 0 8px 32px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    width: 280px;
+    background: #1a6d7a;
+    color: white;
+    border-radius: 12px;
+    padding: 15px;
+    z-index: 999999;
+    font-family: 'Segoe UI', Tahoma, sans-serif;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+    border: 1px solid rgba(255,255,255,0.1);
+
+    /* SMOOTH TOGGLE ANIMATION */
+    transition: opacity 0.4s ease, transform 0.4s ease;
+    opacity: 1;
+    transform: translateY(0);
   }
+
+  /* CLASS TO HIDE THE DASHBOARD */
+  .dashboard-hidden {
+    opacity: 0 !important;
+    transform: translateY(-20px) !important;
+    pointer-events: none; /* Prevents clicking it while invisible */
+  }
+
   .header { display: flex; align-items: center; gap: 10px; margin-bottom: 15px; font-weight: bold; }
   .mini-logo { width: 24px; height: 24px; }
   .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
@@ -47,15 +70,20 @@ style.textContent = `
 shadow.appendChild(style);
 shadow.appendChild(dashboard);
 
+// 3. Message Listener for Python Updates
 chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "UPDATE_DASHBOARD") {
     const data = message.payload;
-    shadow.getElementById('expr-val').innerText = data.last_expression;
-    shadow.getElementById('gest-val').innerText = data.last_gesture;
+    const dashboardElement = shadow.getElementById('sova-dashboard');
 
-    const historyBox = shadow.getElementById('tts-history');
-    if (data.tts_history && data.tts_history.length > 0) {
-        historyBox.innerText = data.tts_history[0]; // Show the most recent one
+    // --- TOGGLE VISIBILITY ---
+    // If show_dashboard is false, we add the hidden class
+    if (data.show_dashboard === false) {
+        dashboardElement.classList.add('dashboard-hidden');
+    } else {
+        dashboardElement.classList.remove('dashboard-hidden');
     }
-  }
-});
+
+    // --- UPDATE VALUES ---
+    shadow.getElementById('expr-val').innerText = data.last_expression || "Neutral";
+    shadow.getElementById('gest-val').

@@ -30,6 +30,22 @@
             <button class="btn">Tutorial</button>
         </div>
     </div>
+    <div class="button-group">
+        <button id="start-btn" class="btn primary">Start SOVA</button>
+        <button id="toggle-btn" class="btn secondary">Toggle Dashboard</button>
+    </div>
+
+    <script>
+        // Manual Toggle for the UI
+        document.getElementById('toggle-btn').addEventListener('click', () => {
+            fetch('http://127.0.0.1:5000/manual_toggle');
+        });
+
+        // Existing Start Code
+        document.getElementById('start-btn').addEventListener('click', () => {
+            fetch('http://127.0.0.1:5000/start');
+         });
+    </script>
 
 </body>
 </html>

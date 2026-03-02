@@ -34,16 +34,25 @@ def start_sova():
 def get_status():
     """The Chrome Extension will call this every 1 second to update the dashboard."""
     return jsonify(sova_state), 200
-def update_state_callback(expr, gest, act, tts_text=None):
+
+
+# In app.py
+sova_state = {
+    "last_expression": "Neutral",
+    "last_gesture": "No Gesture",
+    "show_dashboard": True,  # The Extension looks at this!
+    "tts_history": []
+}
+
+def update_state_callback(expr, gest, act, tts_text, toggle_ui=True):
     global sova_state
     sova_state["last_expression"] = expr
     sova_state["last_gesture"] = gest
-    sova_state["last_action"] = act
+    sova_state["show_dashboard"] = toggle_ui  # Update the toggle state here
 
     if tts_text:
         sova_state["tts_history"].insert(0, tts_text)
         sova_state["tts_history"] = sova_state["tts_history"][:5]
-
 
 if __name__ == '__main__':
     print("SOVA Backend running on http://127.0.0.1:5000")
