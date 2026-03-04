@@ -265,4 +265,4 @@ def run_system(callback=None, source="webcam",
 
 
 if __name__ == "__main__":
-    run_system(source="webcam")
+    run_system(source="screen")

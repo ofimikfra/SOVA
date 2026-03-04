@@ -18,9 +18,11 @@ def _confidence_tier(conf: float) -> str:
 
 _SYSTEM = (
     "You are describing a person's state during a video call. "
-    "Write exactly ONE short sentence, maximum 12 words. "
+    "Write exactly ONE short, human-like, casual sentence, maximum 10 words. "
+    "Don't make the sentence complicated or dramatic."
+    "Use simple language."
     "Never use first-person ('I', 'I'm', 'I think', 'I can't'). "
-    "Never say 'but', 'however', 'although', 'though', 'genuinely', 'clearly', 'obviously'. "
+    # "Never say 'but', 'however', 'although', 'though', 'genuinely', 'clearly', 'obviously'. "
     "Never trail off or explain your uncertainty. "
     "Never contradict yourself in the same sentence. "
     "End cleanly with a single period. "
@@ -29,21 +31,18 @@ _SYSTEM = (
 
 _CONFIDENCE_INSTRUCTION = {
     "low": (
-        "Confidence is LOW. You MUST use uncertain words: "
+        "You MUST use uncertain words: "
         "'seems', 'appears', 'might be', 'looks like'. "
         "NEVER use certain words like 'is', 'looks happy', 'clearly', 'genuinely'. "
-        "Good example: 'The person seems slightly distracted.' "
-        "Bad example: 'The person looks genuinely happy.' "
+        "DO NOT mention the low confidence level."
     ),
     "medium": (
-        "Confidence is MEDIUM. Use hedged language only: "
+        "Use hedged language only: "
         "'appears to be', 'seems to be', 'looks like they'. "
         "NEVER use 'is' as a certainty. "
-        "Good example: 'They appear to be engaged and focused.' "
     ),
     "high": (
-        "Confidence is HIGH. Be direct, no hedging words. "
-        "Good example: 'The person is smiling and engaged.' "
+        "Be direct, no hedging words. "
     ),
 }
 
