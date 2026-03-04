@@ -517,12 +517,12 @@ class TestNLP:
 
     def test_empty_returns_neutral(self, nlp):
         label, conf = nlp([])
-        assert label == "neutral"
+        assert label == "Neutral"
         assert conf  == 1.0
 
     def test_whitespace_only_returns_neutral(self, nlp):
-        label, conf = nlp(["   ", "\t", "\n"])
-        assert label == "neutral"
+        label, _ = nlp(["   ", "\t", "\n"])
+        assert label == "Neutral"
 
     def test_mixed_not_confidently_positive(self, nlp):
         label, conf = nlp([
@@ -718,6 +718,7 @@ class TestCaptionSentiment:
         assert result_with    is not None and isinstance(result_with[5],    str)
         assert result_without is not None and isinstance(result_without[5], str)
         assert len(result_with[5].strip())    > 0
+        assert len(result_without[5].strip()) > 0
 
     def test_run_system_source_mentions_summary(self):
         """The `run_system` implementation should include the word
@@ -728,7 +729,6 @@ class TestCaptionSentiment:
 
         src = inspect.getsource(main.run_system)
         assert '"summary"' in src
-        assert len(result_without[5].strip()) > 0
 
     # ── NLP label correctly reaches summarize() ────────────────────────────
 

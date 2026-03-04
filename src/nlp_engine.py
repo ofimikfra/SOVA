@@ -25,12 +25,14 @@ def analyze(audio: list[str]) -> tuple[str, float]:
     or 'neutral'.
     """
     if not audio:
-        return "No audio detected", 1.0
+        print("[NLP] No audio detected.")
+        return "Neutral", 1.0
 
     # Join into one block — DistilBERT handles up to 512 tokens
     text = " ".join(audio).strip()
     if not text:
-        return "No one speaking", 1.0
+        print("[NLP] No audio detected.")
+        return "Neutral", 1.0
 
     result = _classifier(text)[0]
 
