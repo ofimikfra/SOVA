@@ -50,26 +50,48 @@ _CONFIDENCE_INSTRUCTION = {
 
 # ── Prompt builder ────────────────────────────────────────────────────────────
 
-def _build_prompt(expression: str, gesture: str,
-                  action: str, sentiment: str, overall_conf: float) -> str:
-    tier = _confidence_tier(overall_conf)
+def _build_prompt(expression: str, gesture: str, action: str,
+                  nlp_label: str | None, nlp_conf: float | None,
+                  overall_conf: float) -> str:
+
+    tier             = _confidence_tier(overall_conf)
+    conf_instruction = _CONFIDENCE_INSTRUCTION[tier]
 
     gesture_line = f"Gesture: {gesture}" if gesture != "No Gesture" else ""
     action_line  = f"Body:    {action}"  if action  != "Person Center" else ""
 
-    signals = "\n".join(filter(None, [
+    # Only include speech if captions were actually present
+    speech_line   = ""
+    conflict_line = ""
+    if nlp_label is not None:
+        speech_line = f"Speech sentiment: {nlp_label} ({nlp_conf:.0%} confidence)"
+
+        conflict = (
+            (expression == "Smiling"  and nlp_label == "negative") or
+            (expression == "Frowning" and nlp_label == "positive")
+        )
+        if conflict:
+            conflict_line = (
+                "Note: expression and speech conflict — "
+                "consider sarcasm or mixed feelings."
+            )
+
+    lines = filter(None, [
         f"Expression: {expression}",
         gesture_line,
         action_line,
-        f"Sentiment:  {sentiment}",
-    ]))
+        speech_line,
+        conflict_line,
+        f"Confidence: {overall_conf:.0%}",
+    ])
 
     return (
         f"{_SYSTEM}\n"
-        f"{_CONFIDENCE_INSTRUCTION[tier]}\n\n"
-        f"Signals:\n{signals}\n\n"
-        f"One sentence. End with a period. Nothing after it.\n"
-        f"Description:"
+        f"{conf_instruction}\n\n"
+        f"Observed signals:\n"
+        + "\n".join(lines)
+        + "\n\nWrite one sentence only. No 'but', no 'I', no trailing thoughts.\n"
+        + "Description:"
     )
 
 
@@ -197,15 +219,31 @@ def _template_fallback(expression: str, gesture: str,
 
 # ── Public API ────────────────────────────────────────────────────────────────
 
-def summarize(expression: str, gesture: str,
-              action: str, sentiment: str,
+def summarize(expression: str, gesture: str, action: str,
+              nlp_label: str | None, nlp_conf: float | None,
               overall_conf: float) -> str:
-    prompt = _build_prompt(expression, gesture, action, sentiment, overall_conf)
+    prompt = _build_prompt(expression, gesture, action,
+                           nlp_label, nlp_conf, overall_conf)
     result = _call_ollama(prompt)
 
     if result:
         print(f"[DESCRIPTION] Ollama ({_confidence_tier(overall_conf)}): {result}")
         return result
+
+    # Template fallback — derive sentiment from what we have
+    if nlp_label is not None:
+        from src.processor import _fuse_sentiment
+        sentiment, _ = _fuse_sentiment(expression, nlp_label, nlp_conf)
+    else:
+        # No captions — use expression polarity directly
+        from src.processor import _EXPR_POLARITY
+        polarity, _ = _EXPR_POLARITY.get(expression, (0.0, 0.0))
+        if polarity > 0.25:
+            sentiment = "positive"
+        elif polarity < -0.25:
+            sentiment = "negative"
+        else:
+            sentiment = "neutral"
 
     result = _template_fallback(expression, gesture, action, sentiment, overall_conf)
     print(f"[DESCRIPTION] Template ({_confidence_tier(overall_conf)}): {result}")

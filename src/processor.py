@@ -136,7 +136,15 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
 
     overall_conf = round(0.60 * sent_conf + 0.40 * avg_expr_conf, 3)
 
-    description = summarize(expression, gesture, action, sentiment, overall_conf)
+    # In flushAll():
+    had_captions = bool(captions)
+
+    description = summarize(
+        expression, gesture, action,
+        nlp_label   = nlp_label  if had_captions else None,
+        nlp_conf    = nlp_conf   if had_captions else None,
+        overall_conf= overall_conf,
+    )
 
     print(f"\n{'='*50}")
     print(f"[FLUSH] Results after {INTERVAL:.0f}s interval:")

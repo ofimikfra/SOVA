@@ -19,12 +19,21 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 # ── Helpers ────────────────────────────────────────────────────────────────────
 
 def _force_flush(expr, gest, action, captions=None):
+    """
+    Push one set of signals and force an immediate flush.
+
+    captions=None  → no captions this window (had_captions=False)
+                     summarize() receives nlp_label=None
+    captions=[]    → same as None — no speech signal passed to Ollama
+    captions=[...] → captions present (had_captions=True)
+                     NLP runs and nlp_label is passed to summarize()
+    """
     import src.processor as p
     p.processExpression(expr,   1.0)
     p.processGesture(gest,      1.0)
     p.processBodyAction(action, 1.0)
     p._next_flush_time = 0
-    return p.flushAll(captions=captions or [])
+    return p.flushAll(captions=captions)
 
 
 def _words(text: str) -> int:
@@ -76,6 +85,12 @@ def dominant():
     return _getDominant
 
 
+@pytest.fixture
+def build_prompt():
+    from src.description_engine import _build_prompt
+    return _build_prompt
+
+
 # ══════════════════════════════════════════════
 #  1. Confidence tiers
 # ══════════════════════════════════════════════
@@ -103,7 +118,7 @@ class TestConfidenceTiers:
 
 
 # ══════════════════════════════════════════════
-#  2. Template fallback
+#  2. Template fallback — hedging by tier
 # ══════════════════════════════════════════════
 
 class TestTemplateFallback:
@@ -159,7 +174,198 @@ class TestTemplateFallback:
 
 
 # ══════════════════════════════════════════════
-#  3. Ollama post-processing
+#  3. Template fallback — no captions path
+#  When nlp_label=None, fallback derives sentiment
+#  from _EXPR_POLARITY directly instead of fusion.
+# ══════════════════════════════════════════════
+
+class TestTemplateFallbackNoCaptions:
+
+    def test_smiling_no_captions_uses_positive_template(self, template):
+        """Smiling has positive polarity (0.85) — should map to positive template."""
+        result = template("Smiling", "No Gesture", "Person Center", "positive", 0.90)
+        assert isinstance(result, str) and len(result) > 0
+        # High conf + positive → direct statement
+        assert result.startswith("The"), f"Got: '{result}'"
+
+    def test_frowning_no_captions_uses_negative_template(self, template):
+        """Frowning has negative polarity (-0.85) — should map to negative template."""
+        result = template("Frowning", "No Gesture", "Person Center", "negative", 0.90)
+        assert isinstance(result, str) and len(result) > 0
+        assert "concerned" in result.lower() or "displeased" in result.lower(), \
+            f"Got: '{result}'"
+
+    def test_neutral_no_captions_uses_neutral_template(self, template):
+        """Neutral expression has zero polarity — should map to neutral template."""
+        result = template("Neutral", "No Gesture", "Person Center", "neutral", 0.90)
+        assert isinstance(result, str) and len(result) > 0
+        assert "focused" in result.lower() or "attentive" in result.lower(), \
+            f"Got: '{result}'"
+
+    def test_expression_polarity_mapping(self):
+        """Verify _EXPR_POLARITY maps expressions to the right sentiment bucket."""
+        from src.processor import _EXPR_POLARITY
+
+        positive_exprs = ["Smiling", "Eyebrows Raised", "Left Wink", "Right Wink"]
+        negative_exprs = ["Frowning"]
+        neutral_exprs  = ["Neutral", "Mouth Open"]
+
+        for expr in positive_exprs:
+            polarity, _ = _EXPR_POLARITY.get(expr, (0.0, 0.0))
+            assert polarity > 0, \
+                f"{expr} should have positive polarity, got {polarity}"
+
+        for expr in negative_exprs:
+            polarity, _ = _EXPR_POLARITY.get(expr, (0.0, 0.0))
+            assert polarity < 0, \
+                f"{expr} should have negative polarity, got {polarity}"
+
+        for expr in neutral_exprs:
+            polarity, _ = _EXPR_POLARITY.get(expr, (0.0, 0.0))
+            assert abs(polarity) <= 0.25, \
+                f"{expr} should be near-neutral polarity, got {polarity}"
+
+
+# ══════════════════════════════════════════════
+#  4. Prompt building
+#  Tests _build_prompt() directly to verify that
+#  speech lines and conflict notes are included
+#  or omitted correctly based on inputs.
+# ══════════════════════════════════════════════
+
+class TestPromptBuilding:
+
+    def test_no_captions_omits_speech_line(self, build_prompt):
+        """When nlp_label=None (no captions), prompt should contain no speech sentiment line."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "Speech sentiment" not in prompt, \
+            f"Speech line should be absent when nlp_label=None, got:\n{prompt}"
+
+    def test_captions_present_includes_speech_line(self, build_prompt):
+        """When nlp_label is set, prompt should include the speech sentiment line."""
+        prompt = build_prompt(
+            "Neutral", "No Gesture", "Person Center",
+            nlp_label="positive", nlp_conf=0.88, overall_conf=0.80
+        )
+        assert "Speech sentiment" in prompt, \
+            f"Speech line should be present when nlp_label is set, got:\n{prompt}"
+        assert "positive" in prompt.lower(), \
+            f"Speech label should appear in prompt, got:\n{prompt}"
+
+    def test_conflict_smiling_negative_adds_note(self, build_prompt):
+        """Smiling + negative speech should trigger conflict note in prompt."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label="negative", nlp_conf=0.85, overall_conf=0.60
+        )
+        assert "conflict" in prompt.lower(), \
+            f"Conflict note should appear for smiling + negative speech, got:\n{prompt}"
+        assert "sarcasm" in prompt.lower() or "mixed" in prompt.lower(), \
+            f"Conflict note should mention sarcasm or mixed feelings, got:\n{prompt}"
+
+    def test_conflict_frowning_positive_adds_note(self, build_prompt):
+        """Frowning + positive speech should trigger conflict note in prompt."""
+        prompt = build_prompt(
+            "Frowning", "No Gesture", "Person Center",
+            nlp_label="positive", nlp_conf=0.85, overall_conf=0.60
+        )
+        assert "conflict" in prompt.lower(), \
+            f"Conflict note should appear for frowning + positive speech, got:\n{prompt}"
+
+    def test_no_conflict_when_signals_align(self, build_prompt):
+        """Smiling + positive speech — no conflict note should appear."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label="positive", nlp_conf=0.88, overall_conf=0.85
+        )
+        assert "conflict" not in prompt.lower(), \
+            f"No conflict note expected for aligned signals, got:\n{prompt}"
+
+    def test_no_conflict_note_when_no_captions(self, build_prompt):
+        """With no captions, there can be no conflict — note must not appear."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "conflict" not in prompt.lower(), \
+            f"No conflict note expected when nlp_label=None, got:\n{prompt}"
+
+    def test_gesture_line_included_when_present(self, build_prompt):
+        """Non-default gesture should appear in the prompt."""
+        prompt = build_prompt(
+            "Smiling", "Thumbs Up", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "Thumbs Up" in prompt, \
+            f"Gesture should appear in prompt, got:\n{prompt}"
+
+    def test_gesture_line_omitted_when_default(self, build_prompt):
+        """'No Gesture' should not appear as a signal line in the prompt."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "No Gesture" not in prompt, \
+            f"Default gesture should be omitted from prompt, got:\n{prompt}"
+
+    def test_action_line_omitted_when_default(self, build_prompt):
+        """'Person Center' should not appear as a signal line in the prompt."""
+        prompt = build_prompt(
+            "Smiling", "No Gesture", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "Person Center" not in prompt, \
+            f"Default action should be omitted from prompt, got:\n{prompt}"
+
+    def test_action_line_included_when_non_default(self, build_prompt):
+        """Non-default action should appear in the prompt."""
+        prompt = build_prompt(
+            "Neutral", "No Gesture", "Looking Away",
+            nlp_label=None, nlp_conf=None, overall_conf=0.80
+        )
+        assert "Looking Away" in prompt, \
+            f"Non-default action should appear in prompt, got:\n{prompt}"
+
+    def test_prompt_always_contains_expression(self, build_prompt):
+        """Expression should always appear in the prompt."""
+        for expr in ("Smiling", "Frowning", "Neutral", "Eyebrows Raised"):
+            prompt = build_prompt(
+                expr, "No Gesture", "Person Center",
+                nlp_label=None, nlp_conf=None, overall_conf=0.80
+            )
+            assert expr in prompt, \
+                f"Expression '{expr}' should always appear in prompt"
+
+    def test_prompt_contains_confidence(self, build_prompt):
+        """Confidence value should appear in the prompt."""
+        prompt = build_prompt(
+            "Neutral", "No Gesture", "Person Center",
+            nlp_label=None, nlp_conf=None, overall_conf=0.75
+        )
+        assert "75%" in prompt or "Confidence" in prompt, \
+            f"Confidence should appear in prompt, got:\n{prompt}"
+
+    @pytest.mark.parametrize("nlp_label,nlp_conf", [
+        ("positive", 0.90),
+        ("negative", 0.80),
+        ("neutral",  0.70),
+    ])
+    def test_speech_confidence_shown_as_percentage(self, build_prompt, nlp_label, nlp_conf):
+        """Speech confidence should be shown as a percentage in the prompt."""
+        prompt = build_prompt(
+            "Neutral", "No Gesture", "Person Center",
+            nlp_label=nlp_label, nlp_conf=nlp_conf, overall_conf=0.75
+        )
+        expected_pct = f"{int(nlp_conf * 100)}%"
+        assert expected_pct in prompt, \
+            f"Expected '{expected_pct}' in prompt, got:\n{prompt}"
+
+
+# ══════════════════════════════════════════════
+#  5. Ollama post-processing
 # ══════════════════════════════════════════════
 
 class TestOllamaPostProcessing:
@@ -227,7 +433,10 @@ class TestOllamaPostProcessing:
 
 
 # ══════════════════════════════════════════════
-#  4. Sentiment fusion
+#  6. Sentiment fusion
+#  Fusion is now used for dashboard UI only —
+#  not passed to Ollama. Tests remain to ensure
+#  the dashboard sentiment label stays correct.
 # ══════════════════════════════════════════════
 
 class TestSentimentFusion:
@@ -243,9 +452,10 @@ class TestSentimentFusion:
         assert conf > 0.25
 
     def test_conflict_yields_neutral(self, fuse):
+        # Fusion still collapses conflicts to neutral for the dashboard colour
         sentiment, conf = fuse("Smiling", "negative", 0.88)
         assert sentiment == "neutral", \
-            f"Conflicting signals should yield neutral, got {sentiment}"
+            f"Conflicting signals should yield neutral for dashboard, got {sentiment}"
 
     def test_neutral_expression_no_captions(self, fuse):
         sentiment, conf = fuse("Neutral", "neutral", 1.0)
@@ -257,7 +467,6 @@ class TestSentimentFusion:
         assert polarity == 0.0 and weight == 0.0
 
     def test_boundary_025_is_neutral(self, fuse):
-        # Mouth Open (0.10 * 0.3 = 0.03) + neutral NLP → blended ≈ 0.012 → neutral
         sentiment, conf = fuse("Mouth Open", "neutral", 1.0)
         assert sentiment == "neutral"
 
@@ -283,7 +492,7 @@ class TestSentimentFusion:
 
 
 # ══════════════════════════════════════════════
-#  5. NLP engine
+#  7. NLP engine
 # ══════════════════════════════════════════════
 
 class TestNLP:
@@ -362,7 +571,194 @@ class TestNLP:
 
 
 # ══════════════════════════════════════════════
-#  6. getDominant
+#  8. Caption → Sentiment integration
+#  Tests that captions correctly influence both
+#  the dashboard sentiment (via fusion) and the
+#  Ollama prompt (via raw nlp_label passing).
+# ══════════════════════════════════════════════
+
+class TestCaptionSentiment:
+
+    # ── No captions → expression drives everything ─────────────────────────
+
+    def test_no_captions_neutral_expression_is_neutral(self):
+        """No captions + neutral expression → neutral sentiment for dashboard."""
+        result = _force_flush("Neutral", "No Gesture", "Person Center", captions=None)
+        assert result is not None
+        _, _, _, sentiment, _, _ = result
+        assert sentiment == "neutral", \
+            f"No captions + neutral expression should be neutral, got {sentiment}"
+
+    def test_no_captions_smiling_tends_positive(self):
+        """No captions + smiling expression → sentiment driven by expression polarity."""
+        result = _force_flush("Smiling", "No Gesture", "Person Center", captions=None)
+        assert result is not None
+        _, _, _, sentiment, conf, description = result
+        assert sentiment in ("positive", "neutral"), \
+            f"No captions + smiling should be positive/neutral, got {sentiment}"
+        assert isinstance(description, str) and len(description) > 0
+
+    def test_no_captions_frowning_tends_negative(self):
+        """No captions + frowning expression → sentiment driven by expression polarity."""
+        result = _force_flush("Frowning", "No Gesture", "Person Center", captions=None)
+        assert result is not None
+        _, _, _, sentiment, conf, description = result
+        assert sentiment in ("negative", "neutral"), \
+            f"No captions + frowning should be negative/neutral, got {sentiment}"
+
+    # ── Captions present → NLP reaches dashboard and prompt ───────────────
+
+    def test_positive_captions_neutral_expression_produces_positive(self):
+        """Strong positive captions + neutral face → positive dashboard sentiment.
+        NLP (60% weight) dominates when expression is neutral."""
+        result = _force_flush(
+            "Neutral", "No Gesture", "Person Center",
+            captions=[
+                "This is a great idea, I love it!",
+                "Absolutely brilliant, let's go with this.",
+                "Yes, I fully agree.",
+            ]
+        )
+        assert result is not None
+        _, _, _, sentiment, conf, _ = result
+        assert sentiment == "positive", \
+            f"Strong positive captions + neutral face should be positive, got {sentiment} ({conf:.2f})"
+
+    def test_negative_captions_neutral_expression_produces_negative(self):
+        """Strong negative captions + neutral face → negative dashboard sentiment."""
+        result = _force_flush(
+            "Neutral", "No Gesture", "Person Center",
+            captions=[
+                "I completely disagree with this.",
+                "This is not working at all.",
+                "I'm very unhappy with this outcome.",
+            ]
+        )
+        assert result is not None
+        _, _, _, sentiment, conf, _ = result
+        assert sentiment == "negative", \
+            f"Strong negative captions + neutral face should be negative, got {sentiment} ({conf:.2f})"
+
+    # ── Conflict: signals disagree → dashboard neutral, prompt gets conflict ──
+
+    def test_conflict_smiling_negative_captions_neutral_on_dashboard(self):
+        """Smiling + negative captions → fused sentiment is neutral for dashboard.
+        But Ollama prompt should contain the conflict note (tested in TestPromptBuilding)."""
+        result = _force_flush(
+            "Smiling", "No Gesture", "Person Center",
+            captions=[
+                "I really disagree with this.",
+                "This isn't working at all.",
+                "I'm very unhappy with this outcome.",
+            ]
+        )
+        assert result is not None
+        _, _, _, sentiment, conf, description = result
+        assert sentiment == "neutral", \
+            f"Conflicting signals should produce neutral dashboard sentiment, got {sentiment}"
+        # Description should still be generated
+        assert isinstance(description, str) and len(description) > 0
+
+    def test_conflict_frowning_positive_captions_neutral_on_dashboard(self):
+        """Frowning + positive captions → fused sentiment is neutral for dashboard."""
+        result = _force_flush(
+            "Frowning", "No Gesture", "Person Center",
+            captions=[
+                "This is a great idea!",
+                "I love this plan.",
+                "Absolutely brilliant.",
+            ]
+        )
+        assert result is not None
+        _, _, _, sentiment, _, _ = result
+        assert sentiment == "neutral", \
+            f"Conflicting signals (frowning + positive captions) should be neutral, got {sentiment}"
+
+    # ── Aligned signals boost confidence ──────────────────────────────────
+
+    def test_aligned_signals_higher_confidence_than_expression_alone(self):
+        """Smiling + positive captions should have higher dashboard confidence
+        than smiling with no captions."""
+        result_aligned = _force_flush(
+            "Smiling", "No Gesture", "Person Center",
+            captions=["This is great!", "Absolutely love it."]
+        )
+        result_expr_only = _force_flush(
+            "Smiling", "No Gesture", "Person Center",
+            captions=None
+        )
+        assert result_aligned   is not None
+        assert result_expr_only is not None
+
+        conf_aligned   = result_aligned[4]
+        conf_expr_only = result_expr_only[4]
+
+        assert conf_aligned >= conf_expr_only, \
+            f"Aligned signals should have >= confidence: {conf_aligned:.2f} vs {conf_expr_only:.2f}"
+
+    # ── Caption presence flag ──────────────────────────────────────────────
+
+    def test_empty_list_treated_same_as_none(self):
+        """captions=[] and captions=None should both mean 'no speech signal'."""
+        result_none  = _force_flush("Neutral", "No Gesture", "Person Center", captions=None)
+        result_empty = _force_flush("Neutral", "No Gesture", "Person Center", captions=[])
+        assert result_none  is not None
+        assert result_empty is not None
+        # Both should produce neutral sentiment with no speech signal
+        assert result_none[3]  == "neutral"
+        assert result_empty[3] == "neutral"
+
+    def test_description_generated_regardless_of_captions(self):
+        """Description should always be a non-empty string whether or not
+        captions are present."""
+        result_with    = _force_flush("Smiling", "No Gesture", "Person Center",
+                                      captions=["Great meeting."])
+        result_without = _force_flush("Smiling", "No Gesture", "Person Center",
+                                      captions=None)
+        assert result_with    is not None and isinstance(result_with[5],    str)
+        assert result_without is not None and isinstance(result_without[5], str)
+        assert len(result_with[5].strip())    > 0
+        assert len(result_without[5].strip()) > 0
+
+    # ── NLP label correctly reaches summarize() ────────────────────────────
+
+    def test_caption_nlp_label_reaches_final_sentiment(self):
+        """With neutral expression, NLP (60% weight) should dominate
+        the fused sentiment."""
+        result = _force_flush(
+            "Neutral", "No Gesture", "Person Center",
+            captions=[
+                "This is absolutely wonderful.",
+                "I'm so happy with this result.",
+                "Best decision we've made.",
+            ]
+        )
+        assert result is not None
+        _, _, _, sentiment, conf, _ = result
+        assert sentiment == "positive", \
+            f"With neutral expression, positive captions should dominate, got {sentiment}"
+
+    @pytest.mark.parametrize("captions,expected", [
+        (
+            ["Great work!", "Love this idea.", "Absolutely perfect."],
+            "positive"
+        ),
+        (
+            ["Terrible outcome.", "I hate this.", "This is a disaster."],
+            "negative"
+        ),
+    ])
+    def test_clear_captions_produce_correct_nlp_label(self, nlp, captions, expected):
+        """NLP engine should classify clearly positive/negative captions correctly."""
+        label, conf = nlp(captions)
+        assert label == expected, \
+            f"Expected {expected} for {captions}, got {label} ({conf:.2f})"
+        assert conf >= 0.65, \
+            f"Clear {expected} captions should have conf >= 0.65, got {conf:.2f}"
+
+
+# ══════════════════════════════════════════════
+#  9. getDominant
 # ══════════════════════════════════════════════
 
 class TestGetDominant:
@@ -371,22 +767,17 @@ class TestGetDominant:
         assert dominant([], neutral="Neutral") == "Neutral"
 
     def test_single_weak_item_neutral_wins(self, dominant):
-        # Neutral wins only when its accumulated score ties or beats the non-neutral score.
-        # Push one Smiling AND one Neutral so neutral_score >= top_score.
         result = dominant(
             [("Smiling", 0.80), ("Neutral", 0.80)],
             neutral="Neutral"
         )
-        # neutral_score (0.80) >= top_score (0.80) and top_score < 3.0 → neutral wins
         assert result == "Neutral", f"Got {result}"
 
     def test_single_item_no_neutral_wins_outright(self, dominant):
-        # No neutral in buffer at all — non-neutral wins regardless of score
         result = dominant([("Smiling", 0.95)], neutral="Neutral")
         assert result == "Smiling", f"Got {result}"
 
     def test_strong_accumulated_score_wins(self, dominant):
-        # 4 × 0.95 = 3.8 > 3.0 threshold
         result = dominant([("Smiling", 0.95)] * 4, neutral="Neutral")
         assert result == "Smiling"
 
@@ -400,7 +791,7 @@ class TestGetDominant:
 
 
 # ══════════════════════════════════════════════
-#  7. Caption accumulation
+#  10. Caption accumulation
 # ══════════════════════════════════════════════
 
 class TestCaptionAccumulation:
@@ -408,9 +799,7 @@ class TestCaptionAccumulation:
     def test_accumulates_across_frames(self):
         accumulated = []
         accumulated.extend(["This is great."])
-        # flush hasn't fired — don't clear
         accumulated.extend(["I agree with this."])
-        # flush fires — take and clear
         result = accumulated.copy()
         accumulated.clear()
         assert len(result) == 2
@@ -426,7 +815,7 @@ class TestCaptionAccumulation:
 
 
 # ══════════════════════════════════════════════
-#  8. Full flush cycle
+#  11. Full flush cycle
 # ══════════════════════════════════════════════
 
 class TestFlushCycle:
@@ -447,8 +836,8 @@ class TestFlushCycle:
         _, _, _, sentiment, _, _ = result
         assert sentiment in ("negative", "neutral")
 
-    def test_no_captions_yields_neutral(self):
-        result = _force_flush("Neutral", "No Gesture", "Person Center", captions=[])
+    def test_no_captions_neutral_expression_is_neutral(self):
+        result = _force_flush("Neutral", "No Gesture", "Person Center", captions=None)
         assert result is not None
         _, _, _, sentiment, _, _ = result
         assert sentiment == "neutral"
@@ -491,13 +880,22 @@ class TestFlushCycle:
         result = p.flushAll(captions=None)
         assert result is not None
 
+    def test_empty_list_captions_doesnt_crash(self):
+        import src.processor as p
+        p.processExpression("Neutral", 1.0)
+        p.processGesture("No Gesture", 1.0)
+        p.processBodyAction("Person Center", 1.0)
+        p._next_flush_time = 0
+        result = p.flushAll(captions=[])
+        assert result is not None
+
     def test_empty_buffers_return_neutral_defaults(self):
         import src.processor as p
         p._expr_buffer.clear()
         p._gest_buffer.clear()
         p._action_buffer.clear()
         p._next_flush_time = 0
-        result = p.flushAll(captions=[])
+        result = p.flushAll(captions=None)
         assert result is not None
         assert result[0] == "Neutral",       f"Got {result[0]}"
         assert result[1] == "No Gesture",    f"Got {result[1]}"
@@ -507,12 +905,12 @@ class TestFlushCycle:
         import src.processor as p
         import time
         p._next_flush_time = time.time() + 999
-        result = p.flushAll(captions=[])
+        result = p.flushAll(captions=None)
         assert result is None, "Should return None before interval elapses"
 
 
 # ══════════════════════════════════════════════
-#  9. Overall confidence calculation
+#  12. Overall confidence calculation
 # ══════════════════════════════════════════════
 
 class TestOverallConfidence:
@@ -531,7 +929,7 @@ class TestOverallConfidence:
 
 
 # ══════════════════════════════════════════════
-#  10. Confidence vs description consistency
+#  13. Confidence vs description consistency
 # ══════════════════════════════════════════════
 
 class TestConfidenceDescriptionConsistency:
@@ -549,6 +947,10 @@ class TestConfidenceDescriptionConsistency:
             f"High conf should not hedge, got: '{result}'"
 
 
+# ══════════════════════════════════════════════
+#  14. Expression hierarchy
+# ══════════════════════════════════════════════
+
 class TestExpressionHierarchy:
     """
     Tests that _getDominant respects the expression priority hierarchy:
@@ -561,104 +963,75 @@ class TestExpressionHierarchy:
         return lambda buf: _getDominant(buf, neutral="Neutral",
                                         label="TEST", priorities=_EXPR_PRIORITY)
 
-    # ── Priority ordering ─────────────────────────────────────────────────────
-
     def test_mouth_open_beats_smiling(self, expr_dominant):
-        # 1 Mouth Open vs 3 Smiling — priority 6 vs 2, mouth open should win
         buf = [
             ("Mouth Open", 0.90),
             ("Smiling",    0.85),
             ("Smiling",    0.85),
             ("Smiling",    0.85),
         ]
-        assert expr_dominant(buf) == "Mouth Open", \
-            "Mouth Open (priority 6) should beat 3× Smiling (priority 2)"
+        assert expr_dominant(buf) == "Mouth Open"
 
     def test_wink_beats_smiling(self, expr_dominant):
-        # 1 Left Wink vs 2 Smiling — priority 5 vs 2
         buf = [
             ("Left Wink", 0.90),
             ("Smiling",   0.85),
             ("Smiling",   0.85),
         ]
-        assert expr_dominant(buf) == "Left Wink", \
-            "Left Wink (priority 5) should beat 2× Smiling (priority 2)"
+        assert expr_dominant(buf) == "Left Wink"
 
     def test_right_wink_beats_frowning(self, expr_dominant):
-        # Right Wink (5) > Frowning (3)
         buf = [
             ("Right Wink", 0.90),
             ("Frowning",   0.88),
             ("Frowning",   0.88),
         ]
-        assert expr_dominant(buf) == "Right Wink", \
-            "Right Wink (priority 5) should beat 2× Frowning (priority 3)"
+        assert expr_dominant(buf) == "Right Wink"
 
     def test_eyebrows_raised_beats_smiling(self, expr_dominant):
-        # Eyebrows Raised (4) > Smiling (2)
         buf = [
             ("Eyebrows Raised", 0.85),
             ("Smiling",         0.90),
             ("Smiling",         0.90),
         ]
-        assert expr_dominant(buf) == "Eyebrows Raised", \
-            "Eyebrows Raised (priority 4) should beat 2× Smiling (priority 2)"
+        assert expr_dominant(buf) == "Eyebrows Raised"
 
     def test_frowning_beats_smiling(self, expr_dominant):
-        # Frowning (3) > Smiling (2)
         buf = [
             ("Frowning", 0.85),
             ("Smiling",  0.90),
             ("Smiling",  0.90),
         ]
-        assert expr_dominant(buf) == "Frowning", \
-            "Frowning (priority 3) should beat 2× Smiling (priority 2)"
+        assert expr_dominant(buf) == "Frowning"
 
     def test_smiling_beats_neutral(self, expr_dominant):
-        # Smiling (2) > Neutral (1) — enough accumulated score to overcome neutral
-        buf = [("Smiling", 0.90)] * 4  # weighted score = 0.90 * 4 * 2 = 7.2
-        assert expr_dominant(buf) == "Smiling", \
-            "Smiling should win over Neutral with sufficient detections"
-
-    # ── Confidence + priority interaction ─────────────────────────────────────
+        buf = [("Smiling", 0.90)] * 4
+        assert expr_dominant(buf) == "Smiling"
 
     def test_high_conf_low_priority_vs_low_conf_high_priority(self, expr_dominant):
-        # 1 Mouth Open at 0.70 vs 1 Smiling at 0.95
-        # weighted: Mouth Open = 0.70 * 6 = 4.2, Smiling = 0.95 * 2 = 1.9
         buf = [
             ("Mouth Open", 0.70),
             ("Smiling",    0.95),
         ]
-        assert expr_dominant(buf) == "Mouth Open", \
-            "Lower-conf Mouth Open should beat higher-conf Smiling due to priority"
+        assert expr_dominant(buf) == "Mouth Open"
 
     def test_many_smiling_eventually_beats_single_low_conf_mouth_open(self, expr_dominant):
-        # Enough Smiling detections should eventually overcome Mouth Open
-        # Mouth Open: 0.60 * 6 = 3.6
-        # Smiling: 0.85 * 2 * N — needs N such that 0.85*2*N > 3.6 → N > 2.1 → N=3
-        # 3× Smiling: 0.85 * 2 * 3 = 5.1 > 3.6
         buf = [
             ("Mouth Open", 0.60),
             ("Smiling",    0.85),
             ("Smiling",    0.85),
             ("Smiling",    0.85),
         ]
-        assert expr_dominant(buf) == "Smiling", \
-            "Enough high-conf Smiling detections should overcome weak Mouth Open"
+        assert expr_dominant(buf) == "Smiling"
 
-    def test_equal_weighted_score_prefers_higher_priority(self, expr_dominant):
-        # Frowning: 1.0 * 3 = 3.0, Smiling: 1.5 * 2 = 3.0 — tie in weighted score
-        # max() will pick one — just verify it's a valid expression
+    def test_equal_weighted_score_returns_valid(self, expr_dominant):
         buf = [
             ("Frowning", 1.0),
             ("Smiling",  0.75),
             ("Smiling",  0.75),
         ]
         result = expr_dominant(buf)
-        assert result in ("Frowning", "Smiling"), \
-            f"Tie should return a valid expression, got {result}"
-
-    # ── Full priority order ────────────────────────────────────────────────────
+        assert result in ("Frowning", "Smiling")
 
     @pytest.mark.parametrize("higher,lower,higher_priority,lower_priority", [
         ("Mouth Open",      "Left Wink",        6, 5),
@@ -677,44 +1050,22 @@ class TestExpressionHierarchy:
     ])
     def test_priority_ordering(self, expr_dominant,
                                higher, lower, higher_priority, lower_priority):
-        """
-        Each higher-priority expression should beat a same-confidence
-        lower-priority expression when counts are equal.
-        weighted_higher = conf * higher_priority
-        weighted_lower  = conf * lower_priority
-        Since higher_priority > lower_priority, higher always wins.
-        """
-        buf = [
-            (higher, 0.85),
-            (lower,  0.85),
-        ]
+        buf = [(higher, 0.85), (lower, 0.85)]
         result = expr_dominant(buf)
         assert result == higher, \
             f"{higher} (p{higher_priority}) should beat {lower} (p{lower_priority}), got {result}"
 
-    # ── Edge cases ─────────────────────────────────────────────────────────────
-
     def test_single_expression_returns_itself(self, expr_dominant):
-        for expr in ("Mouth Open", "Left Wink", "Eyebrows Raised",
-                     "Frowning", "Smiling"):
-            buf    = [(expr, 0.90)] * 4
-            result = expr_dominant(buf)
-            assert result == expr, \
-                f"Single repeated expression should return itself, got {result}"
+        for expr in ("Mouth Open", "Left Wink", "Eyebrows Raised", "Frowning", "Smiling"):
+            buf = [(expr, 0.90)] * 4
+            assert expr_dominant(buf) == expr
 
     def test_all_neutral_returns_neutral(self, expr_dominant):
-        buf = [("Neutral", 1.0)] * 10
-        assert expr_dominant(buf) == "Neutral"
+        assert expr_dominant([("Neutral", 1.0)] * 10) == "Neutral"
 
     def test_empty_buffer_returns_neutral(self, expr_dominant):
         assert expr_dominant([]) == "Neutral"
 
     def test_left_and_right_wink_same_priority(self, expr_dominant):
-        # Both winks have priority 5 — the one with higher score wins
-        buf = [
-            ("Left Wink",  0.90),
-            ("Right Wink", 0.70),
-        ]
-        result = expr_dominant(buf)
-        assert result == "Left Wink", \
-            "Left Wink with higher score should beat Right Wink (same priority)"
+        buf = [("Left Wink", 0.90), ("Right Wink", 0.70)]
+        assert expr_dominant(buf) == "Left Wink"
