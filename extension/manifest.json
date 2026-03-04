@@ -1,25 +1,35 @@
 {
   "manifest_version": 3,
-  "name": "SOVA Dashboard",
+  "name": "SOVA",
   "version": "1.0",
-  "permissions": ["tabs", "activeTab"],
+  "description": "Real-time expression and sentiment analysis for video calls.",
+  "permissions": [
+    "tabs",
+    "activeTab",
+    "alarms"
+  ],
   "host_permissions": [
     "https://meet.google.com/*"
   ],
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "type": "module"
   },
   "content_scripts": [
-  {
-    "matches": ["https://meet.google.com/*"],
-    "js": ["content.js"],
-    "run_at": "document_idle"
-  }
+    {
+      "matches": ["https://meet.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
   ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "SOVA"
+  },
   "web_accessible_resources": [
     {
       "resources": ["logo.png", "dashboard.html", "styles.css", "dashboard.js"],
-      "matches": ["https://meet.google.com/*"]
+      "matches": ["<all_urls>"]
     }
   ]
 }

@@ -1,43 +1,163 @@
-// --- EXISTING STREAM LOGIC ---
-chrome.runtime.onInstalled.addListener(() => {
-  console.log("SOVA: Meet Expression Detector installed.");
-});
+// ─────────────────────────────────────────────
+//  SOVA Service Worker — background.js
+//  Owns the WebSocket connection to the local
+//  SOVA app. Content scripts relay through here
+//  to avoid Chrome's Private Network Access block.
+// ─────────────────────────────────────────────
+
+const WS_URL            = "ws://localhost:8765";
+const RECONNECT_DELAY   = 3000;
+const DASHBOARD_URL     = chrome.runtime.getURL("dashboard.html");
+
+let socket          = null;
+let _dashboardTabId = null;
+let _meetTabId      = null;
+
+
+// ── WebSocket ─────────────────────────────────
+
+function connect() {
+  socket = new WebSocket(WS_URL);
+
+  socket.addEventListener("open", () => {
+    console.log("[SOVA BG] Connected to local app");
+    broadcastStatus(true);
+  });
+
+  socket.addEventListener("message", (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      // Forward results to the Meet tab's content script
+      if (msg.type === "result" && _meetTabId !== null) {
+        chrome.tabs.sendMessage(_meetTabId, msg).catch(() => {});
+      }
+      // Forward config to dashboard tab
+      if ((msg.type === "result" || msg.type === "config") && _dashboardTabId !== null) {
+        chrome.tabs.sendMessage(_dashboardTabId, msg).catch(() => {});
+      }
+    } catch (e) {
+      console.warn("[SOVA BG] Bad message:", e);
+    }
+  });
+
+  socket.addEventListener("close", () => {
+    console.warn("[SOVA BG] Disconnected — retrying in 3s...");
+    broadcastStatus(false);
+    socket = null;
+    setTimeout(connect, RECONNECT_DELAY);
+  });
+
+  socket.addEventListener("error", () => {
+    socket?.close();
+  });
+}
+
+function sendToApp(payload) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(payload));
+  }
+}
+
+function broadcastStatus(connected) {
+  // Notify popup if open
+  chrome.runtime.sendMessage({ type: "sova_status", connected }).catch(() => {});
+  // Notify Meet tab
+  if (_meetTabId !== null) {
+    chrome.tabs.sendMessage(_meetTabId, {
+      type: "sova_status", connected
+    }).catch(() => {});
+  }
+}
+
+
+// ── Message routing ───────────────────────────
+// Receives messages from content.js and popup.js
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
-  if (msg.action === "getStreamId") {
-    chrome.tabCapture.getMediaStreamId(
-      { targetTabId: sender.tab.id },
-      (streamId) => {
-        if (chrome.runtime.lastError) {
-          sendResponse({ error: chrome.runtime.lastError.message });
-        } else {
-          sendResponse({ streamId });
-        }
-      }
-    );
+
+  // content.js registering itself as the active Meet tab
+  if (msg.type === "register_meet_tab") {
+    _meetTabId = sender.tab?.id ?? null;
+    console.log(`[SOVA BG] Meet tab registered: ${_meetTabId}`);
+    sendResponse({ ok: true, connected: socket?.readyState === WebSocket.OPEN });
     return true;
+  }
+
+  // caption from content.js → forward to app
+  if (msg.type === "caption") {
+    sendToApp({ type: "caption", text: msg.text });
+    sendResponse({ ok: true });
+    return;
+  }
+
+  // settings from dashboard → forward to app
+  if (msg.type === "settings") {
+    sendToApp(msg);
+    sendResponse({ ok: true });
+    return;
+  }
+
+  // get_config from dashboard → forward to app
+  if (msg.type === "get_config") {
+    sendToApp({ type: "get_config" });
+    sendResponse({ ok: true });
+    return;
+  }
+
+  // popup or dashboard requesting connection status
+  if (msg.type === "get_status") {
+    sendResponse({ connected: socket?.readyState === WebSocket.OPEN });
+    return true;
+  }
+
+  // open dashboard tab
+  if (msg.type === "open_dashboard") {
+    openDashboard().then(() => sendResponse({ ok: true }));
+    return true;
+  }
+
+  // keepalive ping from content.js
+  if (msg.type === "ping") {
+    sendResponse({ pong: true });
+    return;
   }
 });
 
-setInterval(async () => {
-  try {
 
-    const response = await fetch('http://127.0.0.1:5000/get_status');
-    const data = await response.json();
+// ── Dashboard tab management ──────────────────
 
-    const [activeTab] = await chrome.tabs.query({ 
-      active: true, 
-      url: "*://meet.google.com/*" 
-    });
-
-    if (activeTab) {
-      chrome.tabs.sendMessage(activeTab.id, {
-        type: "UPDATE_DASHBOARD",
-        payload: data
-      });
+async function openDashboard() {
+  if (_dashboardTabId !== null) {
+    try {
+      await chrome.tabs.update(_dashboardTabId, { active: true });
+      const tab = await chrome.tabs.get(_dashboardTabId);
+      await chrome.windows.update(tab.windowId, { focused: true });
+      return;
+    } catch {
+      _dashboardTabId = null;
     }
-  } catch (error) {
-    // We ignore errors here so the console doesn't fill up if Python is off
-    // console.log("Python server not reachable...");
   }
-}, 1000); // 1000ms = 1 second
+  const tab = await chrome.tabs.create({ url: DASHBOARD_URL });
+  _dashboardTabId = tab.id;
+}
+
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (tabId === _dashboardTabId) _dashboardTabId = null;
+  if (tabId === _meetTabId)      _meetTabId      = null;
+});
+
+
+// ── Lifecycle ─────────────────────────────────
+
+chrome.runtime.onInstalled.addListener(({ reason }) => {
+  if (reason === "install") openDashboard();
+});
+
+// Keepalive alarm — prevents service worker from going idle
+chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
+chrome.alarms.onAlarm.addListener(() => {});
+
+
+// ── Boot ─────────────────────────────────────
+
+connect();

@@ -1,19 +1,52 @@
-// Manual Toggle for the UI
-document.getElementById('toggle-btn').addEventListener('click', () => {
-    fetch('http://127.0.0.1:5000/manual_toggle');
-})
+const WS_URL = "ws://localhost:8765";
+let socket = null;
 
-// Existing Start Code
-document.getElementById('start-btn').addEventListener('click', () => {
-    fetch('http://127.0.0.1:5000/start');
+const dot      = document.getElementById("dot");
+const status   = document.getElementById("status");
+const latest   = document.getElementById("latest");
+const openDash = document.getElementById("open-dash");
+
+// ── Open dashboard via background.js ──────────
+// This ensures we reuse an existing tab rather than opening duplicates.
+openDash.addEventListener("click", () => {
+  chrome.runtime.sendMessage({ type: "open_dashboard" });
 });
 
-document.querySelector('.primary').onclick = () => {
-  fetch('http://127.0.0.1:5000/start')
-    .then(response => response.json())
-    .then(data => {
-      console.log("Python script triggered!");
-      alert("SOVA Assistance Starting...");
-    })
-    .catch(err => alert("Make sure your Python server is running!"));
-};
+// ── Listen for status forwarded from content.js ──
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "sova_status") {
+    setConnected(msg.connected);
+  }
+});
+
+// ── Direct WebSocket for latest description ───
+// Popup connects directly for live description updates.
+function connect() {
+  socket = new WebSocket(WS_URL);
+
+  socket.addEventListener("open", () => setConnected(true));
+
+  socket.addEventListener("message", (e) => {
+    try {
+      const msg = JSON.parse(e.data);
+      if (msg.type === "result" && msg.summary) {
+        latest.textContent = msg.summary;
+      }
+    } catch (_) {}
+  });
+
+  socket.addEventListener("close", () => {
+    setConnected(false);
+    setTimeout(connect, 3000);
+  });
+
+  socket.addEventListener("error", () => socket.close());
+}
+
+function setConnected(connected) {
+  dot.classList.toggle("connected", connected);
+  status.textContent = connected ? "Connected" : "Not connected";
+  status.classList.toggle("connected", connected);
+}
+
+connect();

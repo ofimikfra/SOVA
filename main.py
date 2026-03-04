@@ -13,40 +13,30 @@ from models.gesture_v4 import detectGesture
 from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
+from src.ollama_manager import ensure_ollama
 
 from src import config as _config
 import src.processor as _processor
 import src.tts_engine as _tts
-from src.ollama_manager import ensure_ollama
-
-# ─────────────────────────────────────────────
-#  Settings
-# ─────────────────────────────────────────────
 
 _current_config = _config.load()
+
 
 def _apply_settings(partial: dict):
     global _current_config
     _current_config = _config.update(partial)
-
     if "flush_interval" in partial:
         _processor.set_interval(float(partial["flush_interval"]))
-
     if "tts_enabled" in partial:
         _tts.set_enabled(partial["tts_enabled"])
-
     if "ollama_model" in partial:
-        # Pull in background so the UI doesn't block
-        new_model = partial["ollama_model"]
         threading.Thread(
             target=ensure_ollama,
-            args=(new_model,),
+            args=(partial["ollama_model"],),
             daemon=True
         ).start()
-
     print(f"[CONFIG] Settings updated: {partial}")
     _broadcast_sync({"type": "config", **_current_config})
-
 
 
 # ─────────────────────────────────────────────
@@ -77,12 +67,10 @@ async def _ws_handler(websocket):
                             _caption_queue.append(text)
 
                 elif msg.get("type") == "settings":
-                    # Strip the type key and apply the rest as settings
                     partial = {k: v for k, v in msg.items() if k != "type"}
                     _apply_settings(partial)
 
                 elif msg.get("type") == "get_config":
-                    # Dashboard just connected — send current config back
                     reply = json.dumps({"type": "config", **_current_config})
                     await websocket.send(reply)
 
@@ -114,37 +102,52 @@ def _broadcast_sync(payload: dict):
         asyncio.run_coroutine_threadsafe(_ws_broadcast(payload), _ws_loop)
 
 
-async def _ws_serve():
-    async with websockets.serve(_ws_handler, WS_HOST, WS_PORT):
+async def _ws_serve(stop_event: threading.Event):
+    # ── origins=None accepts connections from any origin (e.g. meet.google.com)
+    async with websockets.serve(_ws_handler, WS_HOST, WS_PORT, origins=None):
         print(f"[WS] Server listening on ws://{WS_HOST}:{WS_PORT}")
-        await asyncio.get_event_loop().create_future()
+        # Poll stop_event instead of running forever —
+        # this lets the port be released cleanly on stop
+        while not stop_event.is_set():
+            await asyncio.sleep(0.1)
+    print("[WS] Server stopped, port released.")
 
 
-def _start_ws_thread():
-    global _ws_loop
+def _start_ws_thread(stop_event: threading.Event):
+    global _ws_loop, _ws_clients
+    _ws_clients = set()          # reset clients on each start
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     _ws_loop = loop
-    loop.run_until_complete(_ws_serve())
+    loop.run_until_complete(_ws_serve(stop_event))
+    loop.close()
+    _ws_loop = None              # clear so _broadcast_sync doesn't use dead loop
 
 
 # ─────────────────────────────────────────────
 #  Main Detection Loop
 # ─────────────────────────────────────────────
 
-def run_system(callback=None, source="webcam", headless=False, stop_event: threading.Event | None = None):
+accumulated_captions: list[str] = []
+
+def run_system(callback=None, source="webcam",
+               headless=False,
+               stop_event: threading.Event | None = None):
 
     if stop_event is None:
         stop_event = threading.Event()
 
-    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
+    # Start WebSocket server — pass stop_event so it shuts down cleanly
+    ws_thread = threading.Thread(
+        target=_start_ws_thread, args=(stop_event,), daemon=True
+    )
     ws_thread.start()
     time.sleep(0.5)
 
+    # Ollama auto-start
     cfg   = _config.load()
     model = cfg.get("ollama_model", "llama3.2:3b")
-    ollama_ready = ensure_ollama(model)
-    if not ollama_ready:
+    if not ensure_ollama(model):
         print("[SOVA] Continuing without Ollama — template descriptions will be used.")
 
     if source == "screen":
@@ -156,13 +159,13 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
         mirror    = True
         print("[SOVA] Monitoring Webcam...")
 
+    # Initialise display state — overlay never crashes before first flush
     display_expr      = "Neutral"
     display_gest      = "No Gesture"
     display_act       = "Person Center"
     display_sentiment = "neutral"
     display_conf      = 0.0
     display_desc      = "Waiting for first analysis..."
-    dashboard_visible = True
 
     print("[SOVA] Engine Active.")
     if not headless:
@@ -203,14 +206,15 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
         processGesture(raw_gest,      gest_conf)
         processBodyAction(raw_action, action_conf)
 
-        # 4. Drain caption queue
+        # 4. Drain caption queue into accumulator
         with _caption_lock:
-            pending_captions = _caption_queue.copy()
+            accumulated_captions.extend(_caption_queue)
             _caption_queue.clear()
 
-        # 5. Flush every N seconds
-        stable_results = flushAll(captions=pending_captions)
+        # 5. Flush every N seconds — pass full accumulated captions
+        stable_results = flushAll(captions=accumulated_captions)
         if stable_results:
+            accumulated_captions.clear()   # ← only clear when flush actually fired
             expr, gest, act, sentiment, sent_conf, description = stable_results
 
             display_expr      = expr
@@ -220,9 +224,6 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
             display_conf      = sent_conf
             display_desc      = description
 
-            if gest == "Thumbs Up":
-                dashboard_visible = not dashboard_visible
-
             _broadcast_sync({
                 "type":             "result",
                 "expression":       expr,
@@ -230,8 +231,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
                 "action":           act,
                 "sentiment":        sentiment,
                 "sentimentConf":    sent_conf,
-                "summary":          description,
-                "dashboardVisible": dashboard_visible,
+                "summary":          description,   
             })
 
             if callback:
@@ -239,7 +239,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
             speak(description)
 
-        # 6. CV window — only when not headless
+        # 6. Visual overlay — only when not running headless
         if not headless:
             overlay_lines = [
                 f"Expression:  {display_expr}",
@@ -255,6 +255,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
             cv2.imshow("SOVA", frame)
             if cv2.waitKey(1) & 0xFF == ord('q'):
+                stop_event.set()
                 break
 
     if not headless:
