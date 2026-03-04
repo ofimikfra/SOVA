@@ -10,94 +10,122 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 
-# threading wrapper
-def voice_worker(text):
+# ── Global toggle — disable your own face detection during Meet ──
+detect_self = True
+
+def set_detect_self(value: bool):
+    global detect_self
+    detect_self = value
+    print(f"[SOVA] Self-detection {'enabled' if value else 'disabled'}")
+
+def speak_description(text):
     speak(text)
-def run_system(callback=None, source="webcam"):
 
-    # Selection logic based on the Extension's request
-    if source == "screen":
-        get_frame = getScreenFrame
-        mirror = False
-        print("[SOVA] Monitoring Screen...")
-    else:
-        get_frame = getCameraFrame
-        mirror = True
-        print("[SOVA] Monitoring Webcam...")
 
-    # State variables for the on-screen display
-    display_expr = "Neutral"
-    display_gest = "No Gesture"
-    display_act = "Person Center"
+# ── Screen thread — Google Meet participants ──
+def run_screen(stop_event, callback, headless):
+    print("[SOVA] Screen thread started (Google Meet)")
 
-    print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
-
-    while True:
-        frame = get_frame()
+    while not (stop_event and stop_event.is_set()):
+        frame = getScreenFrame()
         if frame is None:
             continue
-
-        if mirror:
-            frame = cv2.flip(frame, 1)
 
         h, w, _ = frame.shape
         rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        # 1. FACIAL EXPRESSIONS
+        # Expressions
         results = face_mesh.detect(image)
         raw_expr, expr_conf = "Neutral", 1.0
-
         if results.face_landmarks:
             for face_landmarks in results.face_landmarks:
                 raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
 
-                # Draw Box around face
-                xs = [lm.x * w for lm in face_landmarks]
-                ys = [lm.y * h for lm in face_landmarks]
-                cv2.rectangle(frame, (int(min(xs)), int(min(ys))), (int(max(xs)), int(max(ys))), (0, 255, 0), 2)
-
-        # 2. GESTURES & BODY ACTIONS
-        raw_gest, gest_conf = detectGesture(frame)
+        # Gestures & body
+        raw_gest, gest_conf     = detectGesture(frame)
         raw_action, action_conf = detectBodyAction(frame)
 
-        # 3. FEED THE PROCESSOR (Buffer)
+        # Feed processor buffers
         processExpression(raw_expr, expr_conf)
         processGesture(raw_gest, gest_conf)
         processBodyAction(raw_action, action_conf)
 
-        # 4. THE FLUSH (Triggered every 5 seconds)
-        stable_results = flushAll()
-        if stable_results:
-            expr, gest, act = stable_results
-            voice_text = f"Detected {expr}"
+        # Flush every N seconds (controlled by processor.INTERVAL)
+        stable = flushAll()
+        if stable:
+            expr, gest, act, sentiment, sent_conf, description = stable
 
-            # Update the App.py state so the Chrome Extension sees it!
+            # Speak the description via TTS
+            threading.Thread(target=speak, args=(description,), daemon=True).start()
+
+            # Send to dashboard
             if callback:
-                callback(expr, gest, act, voice_text)
+                callback(expr, gest, act, sentiment, sent_conf, description)
 
-            # Run TTS
-            threading.Thread(target=speak, args=(voice_text,), daemon=True).start()
-        # 5. VISUAL OVERLAY
-        overlay_lines = [
-            f"Expression: {display_expr}",
-            f"Gesture:    {display_gest}",
-            f"Action:     {display_act}",
-        ]
+            print(f"📢 {description}")
 
-        for i, line in enumerate(overlay_lines):
-            cv2.putText(frame, line, (20, h - 30 - (i * 35)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        # Show the processed feed
-        cv2.imshow("SOVA - Assistance Engine", frame)
+# ── Webcam thread — YOUR own face (optional) ──
+def run_webcam(stop_event, callback, headless):
+    print("[SOVA] Webcam thread started (your face)")
 
-        # 'q' to quit
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+    while not (stop_event and stop_event.is_set()):
+        if not detect_self:
+            time.sleep(0.5)
+            continue
+
+        frame = getCameraFrame()
+        if frame is None:
+            continue
+
+        frame = cv2.flip(frame, 1)
+        h, w, _ = frame.shape
+        rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+
+        results = face_mesh.detect(image)
+        raw_expr, expr_conf = "Neutral", 1.0
+        if results.face_landmarks:
+            for face_landmarks in results.face_landmarks:
+                raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
+
+        raw_gest, gest_conf     = detectGesture(frame)
+        raw_action, action_conf = detectBodyAction(frame)
+
+        processExpression(raw_expr, expr_conf)
+        processGesture(raw_gest, gest_conf)
+        processBodyAction(raw_action, action_conf)
+
+        stable = flushAll()
+        if stable:
+            expr, gest, act, sentiment, sent_conf, description = stable
+            threading.Thread(target=speak, args=(description,), daemon=True).start()
+            if callback:
+                callback(expr, gest, act, sentiment, sent_conf, description)
+            print(f"📢 {description}")
+
+
+# ── Main entry ────────────────────────────────
+def run_system(callback=None, source="screen", headless=False, stop_event=None):
+    print("[SOVA] Engine Active.")
+
+    if source == "webcam":
+        run_webcam(stop_event, callback, headless)
+
+    elif source == "screen":
+        run_screen(stop_event, callback, headless)
+
+    elif source == "both":
+        t1 = threading.Thread(target=run_webcam, args=(stop_event, callback, headless), daemon=True)
+        t2 = threading.Thread(target=run_screen, args=(stop_event, callback, headless), daemon=True)
+        t1.start()
+        t2.start()
+        t1.join()
+        t2.join()
 
     cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    run_system(source="webcam")
+    run_system(source="screen", headless=False)
