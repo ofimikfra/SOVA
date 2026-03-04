@@ -31,3 +31,15 @@ Your existing processor.py buffers
 flushAll() every interval
     ↓
 TTS speaks multimodal summary
+
+# 1. Install Ollama
+# https://ollama.com/download  (macOS / Windows / Linux)
+
+# 2. Pull the model (one-time, ~2GB download)
+ollama pull llama3.2:3b
+
+# 3. Start Ollama before running SOVA
+ollama serve
+
+# 4. Run SOVA
+python main.py

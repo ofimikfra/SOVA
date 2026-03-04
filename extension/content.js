@@ -1,94 +1,182 @@
-// --- 1. INITIALIZATION & SAFETY ---
-console.log("SOVA: Dashboard script loading...");
+// ─────────────────────────────────────────────
+//  SOVA Content Script — Google Meet
+//  Scrapes live captions and relays them to the
+//  local SOVA app via WebSocket.
+// ─────────────────────────────────────────────
 
-// Prevent multiple injections if the extension reloads
-if (!document.getElementById('sova-dashboard-host')) {
-    const host = document.createElement('div');
-    host.id = 'sova-dashboard-host';
-    document.body.appendChild(host);
+const WS_URL = "ws://localhost:8765";
+const RECONNECT_DELAY_MS = 3000;
 
-    const shadow = host.attachShadow({ mode: 'open' });
+// Google Meet caption container selector.
+// Meet renders captions inside a div with this attribute.
+const CAPTION_SELECTOR = '[jsname="tgaKEf"]';
 
-    // --- 2. THE DASHBOARD HTML ---
-    const dashboard = document.createElement('div');
-    dashboard.id = 'sova-dashboard';
-    
-    // Safety check for logo: If logo.png is missing, it won't crash the script
-    const logoUrl = chrome.runtime.getURL('logo.png');
-    
-    dashboard.innerHTML = `
-      <div class="header">
-        <img src="${logoUrl}" class="mini-logo" onerror="this.style.display='none'">
-        <span>SOVA Dashboard</span>
-      </div>
-      <div class="stats-grid">
-        <div class="stat-box">
-            <label>Expression</label>
-            <div id="expr-val" class="value">Neutral</div>
-        </div>
-        <div class="stat-box">
-            <label>Gesture</label>
-            <div id="gest-val" class="value">None</div>
-        </div>
-      </div>
-      <div class="history-container">
-        <label>Last Voice Output</label>
-        <div id="tts-history" class="history-list">Waiting...</div>
-      </div>
-      <div class="volume-container">
-        <label>Voice Volume</label>
-        <input type="range" id="volume-slider" min="0" max="1" step="0.1" value="0.8">
-      </div>
-    `;
+let socket = null;
+let lastCaption = "";   // deduplicate — Meet updates the same element in-place
+let overlayEl   = null;
 
-    // --- 3. THE ISOLATED STYLES ---
-    const style = document.createElement('style');
-    style.textContent = `
-      #sova-dashboard {
-        position: fixed; top: 20px; right: 20px; width: 280px;
-        background: #1a6d7a; color: white; border-radius: 12px;
-        padding: 15px; z-index: 999999; font-family: 'Segoe UI', sans-serif;
-        box-shadow: 0 8px 32px rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1);
-        transition: opacity 0.4s ease, transform 0.4s ease;
-        opacity: 1; pointer-events: auto;
+
+// ── WebSocket ────────────────────────────────
+
+function connect() {
+  socket = new WebSocket(WS_URL);
+
+  socket.addEventListener("open", () => {
+    console.log("[SOVA] Connected to local app");
+    updateOverlay({ status: "connected" });
+  });
+
+  socket.addEventListener("message", (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "result") {
+        handleResult(msg);
       }
-      .dashboard-hidden {
-        opacity: 0 !important;
-        transform: translateY(-20px);
-        pointer-events: none !important;
-      }
-      .header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; font-weight: bold; }
-      .mini-logo { width: 24px; height: 24px; object-fit: contain; }
-      .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 12px; }
-      .stat-box { background: rgba(0,0,0,0.25); padding: 10px; border-radius: 8px; text-align: center; }
-      label { font-size: 0.65rem; text-transform: uppercase; opacity: 0.7; display: block; margin-bottom: 2px; }
-      .value { font-size: 0.95rem; font-weight: bold; color: #00f2ff; }
-      .history-list { font-size: 0.8rem; background: rgba(0,0,0,0.2); padding: 8px; border-radius: 6px; min-height: 30px; border-left: 3px solid #00f2ff; }
-    `;
+    } catch (e) {
+      console.warn("[SOVA] Bad message from server:", e);
+    }
+  });
 
-    shadow.appendChild(style);
-    shadow.appendChild(dashboard);
+  socket.addEventListener("close", () => {
+    console.warn("[SOVA] Disconnected — retrying in 3 s...");
+    updateOverlay({ status: "disconnected" });
+    setTimeout(connect, RECONNECT_DELAY_MS);
+  });
 
-    // --- 4. DATA LISTENER ---
-    chrome.runtime.onMessage.addListener((message) => {
-      if (message.type === "UPDATE_DASHBOARD") {
-        const data = message.payload;
-        const dashboardEl = shadow.getElementById('sova-dashboard');
-
-        // Toggle visibility based on the 'show_dashboard' boolean from Python
-        if (data.show_dashboard === false) {
-            dashboardEl.classList.add('dashboard-hidden');
-        } else {
-            dashboardEl.classList.remove('dashboard-hidden');
-        }
-
-        // Update Text Content
-        shadow.getElementById('expr-val').innerText = data.last_expression || "Neutral";
-        shadow.getElementById('gest-val').innerText = data.last_gesture || "None";
-        
-        if (data.tts_history && data.tts_history.length > 0) {
-            shadow.getElementById('tts-history').innerText = data.tts_history[0];
-        }
-      }
-    });
+  socket.addEventListener("error", () => {
+    // 'close' fires right after, which handles the retry
+    socket.close();
+  });
 }
+
+function sendCaption(text) {
+  if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify({ type: "caption", text }));
+  }
+}
+
+
+// ── Caption Scraping ─────────────────────────
+
+function attachCaptionObserver() {
+  const observer = new MutationObserver((mutations) => {
+    for (const mutation of mutations) {
+      // Watch for new caption nodes being added
+      for (const node of mutation.addedNodes) {
+        if (node.nodeType !== Node.ELEMENT_NODE) continue;
+
+        // The caption text lives inside jsname="tgaKEf" spans
+        const captionEls = node.matches(CAPTION_SELECTOR)
+          ? [node]
+          : [...node.querySelectorAll(CAPTION_SELECTOR)];
+
+        for (const el of captionEls) {
+          const text = el.innerText?.trim();
+          if (text && text !== lastCaption) {
+            lastCaption = text;
+            sendCaption(text);
+          }
+        }
+      }
+
+      // Also watch for text changes inside existing caption nodes
+      if (
+        mutation.type === "characterData" ||
+        mutation.type === "childList"
+      ) {
+        const target = mutation.target.closest?.(CAPTION_SELECTOR)
+          ?? (mutation.target.matches?.(CAPTION_SELECTOR)
+              ? mutation.target
+              : null);
+
+        if (target) {
+          const text = target.innerText?.trim();
+          if (text && text !== lastCaption) {
+            lastCaption = text;
+            sendCaption(text);
+          }
+        }
+      }
+    }
+  });
+
+  observer.observe(document.body, {
+    childList:  true,
+    subtree:    true,
+    characterData: true,
+  });
+
+  console.log("[SOVA] Caption observer attached");
+}
+
+
+// ── Overlay ──────────────────────────────────
+
+function createOverlay() {
+  overlayEl = document.createElement("div");
+  overlayEl.id = "sova-overlay";
+  Object.assign(overlayEl.style, {
+    position:        "fixed",
+    bottom:          "80px",
+    right:           "16px",
+    zIndex:          "99999",
+    background:      "rgba(0,0,0,0.72)",
+    color:           "#fff",
+    fontFamily:      "monospace",
+    fontSize:        "13px",
+    lineHeight:      "1.6",
+    padding:         "10px 14px",
+    borderRadius:    "10px",
+    pointerEvents:   "none",
+    minWidth:        "200px",
+    transition:      "opacity 0.3s",
+  });
+  overlayEl.innerHTML = "SOVA — connecting...";
+  document.body.appendChild(overlayEl);
+}
+
+function updateOverlay({ status, expression, gesture, action, sentiment }) {
+  if (!overlayEl) return;
+
+  if (status === "disconnected") {
+    overlayEl.innerHTML = "SOVA — ⚠️ not connected";
+    overlayEl.style.opacity = "0.5";
+    return;
+  }
+
+  if (status === "connected" && !expression) {
+    overlayEl.innerHTML = "SOVA — ✅ connected";
+    overlayEl.style.opacity = "1";
+    return;
+  }
+
+  overlayEl.style.opacity = "1";
+  overlayEl.innerHTML = [
+    `😐 <b>${expression ?? "—"}</b>`,
+    `🤚 ${gesture ?? "—"}`,
+    `🧍 ${action  ?? "—"}`,
+    sentiment ? `💬 ${sentiment}` : "",
+  ]
+    .filter(Boolean)
+    .join("<br>");
+}
+
+function handleResult(msg) {
+  if (msg.dashboardVisible === false) {
+    overlayEl.style.opacity = "0";
+    return;
+  }
+  updateOverlay({
+    expression: msg.expression,
+    gesture:    msg.gesture,
+    action:     msg.action,
+    sentiment:  msg.sentiment,
+  });
+}
+
+
+// ── Boot ─────────────────────────────────────
+
+createOverlay();
+connect();
+attachCaptionObserver();

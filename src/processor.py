@@ -1,5 +1,7 @@
 import time
 from collections import defaultdict
+from src.nlp_engine import analyze as nlp_analyze
+from src.description_engine import summarize, _confidence_tier
 
 INTERVAL = 5.0  # seconds
 
@@ -10,7 +12,72 @@ _gest_buffer   = []
 _action_buffer = []
 
 
-# ------------------------------------ API ----------------------------------- #
+# ── Expression → sentiment polarity map ───────────────────────────────────────
+# Returns a (polarity_score, weight) tuple.
+# polarity_score: -1.0 (negative) to +1.0 (positive)
+# weight: how strongly this expression signals sentiment (0–1)
+
+_EXPR_POLARITY = {
+    "Smiling":          ( 0.85, 0.9),
+    "Eyebrows Raised":  ( 0.40, 0.5),  # surprise — weakly positive
+    "Left Wink":        ( 0.60, 0.6),
+    "Right Wink":       ( 0.60, 0.6),
+    "Mouth Open":       ( 0.10, 0.3),  # ambiguous — near neutral
+    "Frowning":         (-0.85, 0.9),
+    "Neutral":          ( 0.00, 0.0),  # no signal
+}
+
+
+def _expression_to_sentiment(expression: str) -> tuple[float, float]:
+    """Returns (polarity_score, signal_weight) for a given expression label."""
+    return _EXPR_POLARITY.get(expression, (0.0, 0.0))
+
+
+def _fuse_sentiment(expression: str,
+                    nlp_label: str,
+                    nlp_conf: float) -> tuple[str, float]:
+    """
+    Blends NLP sentiment (60%) with facial expression sentiment (40%)
+    into a single unified label + confidence.
+
+    NLP label is 'positive', 'negative', or 'neutral'.
+    Returns (unified_label, unified_confidence).
+    """
+
+    # Convert NLP output to a -1 → +1 score
+    if nlp_label == "positive":
+        nlp_score = nlp_conf          #  0.65 → +1.0
+    elif nlp_label == "negative":
+        nlp_score = -nlp_conf         # -0.65 → -1.0
+    else:
+        nlp_score = 0.0               # neutral
+
+    # Convert expression to a -1 → +1 score
+    expr_polarity, expr_weight = _expression_to_sentiment(expression)
+    # Scale by how strongly the expression signals sentiment
+    expr_score = expr_polarity * expr_weight
+
+    # Weighted blend: 60% NLP, 40% expression
+    NLP_WEIGHT  = 0.60
+    EXPR_WEIGHT = 0.40
+    blended = (nlp_score * NLP_WEIGHT) + (expr_score * EXPR_WEIGHT)
+
+    # Map blended score → label
+    # Thresholds: |blended| > 0.25 = clear signal, else neutral
+    if blended > 0.25:
+        label = "positive"
+        conf  = round(min(blended, 1.0), 3)
+    elif blended < -0.25:
+        label = "negative"
+        conf  = round(min(abs(blended), 1.0), 3)
+    else:
+        label = "neutral"
+        conf  = round(1.0 - abs(blended), 3)
+
+    return label, conf
+
+
+# ── Public API ─────────────────────────────────────────────────────────────────
 
 def processExpression(expression: str, confidence: float = 1.0):
     _expr_buffer.append((expression, confidence))
@@ -23,24 +90,20 @@ def processGesture(gesture: str, confidence: float = 1.0):
 def processBodyAction(action: str, confidence: float = 1.0):
     _action_buffer.append((action, confidence))
 
-# ----------------------------- helper functions ----------------------------- #
-    
-# returns dominant expression, gesture, action after interval -> flushes channels
 
-def flushAll() -> tuple | None:
-    """
-    Call once per frame. Returns (expression, gesture, action) when the
-    30-second interval has elapsed, otherwise returns None.
-    All three channels always flush together.
-    """
+def flushAll(captions: list[str] | None = None) -> tuple | None:
     global _next_flush_time
 
     if time.time() < _next_flush_time:
         return None
 
-    expression = _getDominant(_expr_buffer,   neutral="Neutral",       label="EXPRESSION")
-    gesture    = _getDominant(_gest_buffer,    neutral="No Gesture",    label="GESTURE")
-    action     = _getDominant(_action_buffer,  neutral="Person Center", label="ACTION")
+    # ── Capture conf before clearing buffers ──────────────────────────────
+    expr_confs    = [c for _, c in _expr_buffer] if _expr_buffer else [1.0]
+    avg_expr_conf = sum(expr_confs) / len(expr_confs)
+
+    expression = _getDominant(_expr_buffer,  neutral="Neutral",       label="EXPRESSION")
+    gesture    = _getDominant(_gest_buffer,  neutral="No Gesture",    label="GESTURE")
+    action     = _getDominant(_action_buffer,neutral="Person Center", label="ACTION")
 
     _expr_buffer.clear()
     _gest_buffer.clear()
@@ -48,18 +111,28 @@ def flushAll() -> tuple | None:
 
     _next_flush_time = time.time() + INTERVAL
 
-    # debugging
+    nlp_label, nlp_conf  = nlp_analyze(captions or [])
+    sentiment, sent_conf = _fuse_sentiment(expression, nlp_label, nlp_conf)
+
+    overall_conf = round(0.60 * sent_conf + 0.40 * avg_expr_conf, 3)
+
+    description = summarize(expression, gesture, action, sentiment, overall_conf)
+
     print(f"\n{'='*50}")
     print(f"[FLUSH] Results after {INTERVAL:.0f}s interval:")
     print(f"  Expression : {expression}")
     print(f"  Gesture    : {gesture}")
     print(f"  Action     : {action}")
+    print(f"  NLP raw    : {nlp_label} ({nlp_conf:.2f})")
+    print(f"  Sentiment  : {sentiment} ({sent_conf:.2f})  ← fused")
+    print(f"  Confidence : {overall_conf:.2f} ({_confidence_tier(overall_conf)})")
+    print(f"  Description: {description}")
     print(f"{'='*50}\n")
 
-    return expression, gesture, action
+    return expression, gesture, action, sentiment, sent_conf, description
 
 
-# calculate confidence score of each detected expression + no. detections -> analyze weightage -> output dominant 
+# ── Internal ───────────────────────────────────────────────────────────────────
 
 def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
     if not buffer:
@@ -76,21 +149,13 @@ def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
     non_neutral = {k: v for k, v in scores.items() if k != neutral}
 
     if non_neutral:
-        top            = max(non_neutral, key=non_neutral.get)
-        top_score      = non_neutral[top]
-        neutral_score  = scores.get(neutral, 0.0)
+        top           = max(non_neutral, key=non_neutral.get)
+        top_score     = non_neutral[top]
+        neutral_score = scores.get(neutral, 0.0)
 
         if neutral_score >= top_score:
             if top_score >= 3.0:
                 return top
             return neutral
 
-    result = max(scores, key=scores.get)
-    return result
-
-'''
-TODO: create hierarchy of expressions 
-      left wink = right wink < mouth open < eyebrows raised < smiling < neutral
-
-TODO: detect multiple faces w/ gestures & body actions linked to faces 
-'''
+    return max(scores, key=scores.get)

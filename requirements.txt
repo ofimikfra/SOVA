@@ -6,3 +6,7 @@ flask
 flask-cors
 pyttsx3
 ultralytics
+websockets>=12.0
+transformers>=4.40.0
+torch>=2.2.0  
+requests>=2.31.0
