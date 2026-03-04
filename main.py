@@ -14,6 +14,41 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 
+from src import config as _config
+import src.processor as _processor
+import src.tts_engine as _tts
+from src.ollama_manager import ensure_ollama
+
+# ─────────────────────────────────────────────
+#  Settings
+# ─────────────────────────────────────────────
+
+_current_config = _config.load()
+
+def _apply_settings(partial: dict):
+    global _current_config
+    _current_config = _config.update(partial)
+
+    if "flush_interval" in partial:
+        _processor.set_interval(float(partial["flush_interval"]))
+
+    if "tts_enabled" in partial:
+        _tts.set_enabled(partial["tts_enabled"])
+
+    if "ollama_model" in partial:
+        # Pull in background so the UI doesn't block
+        new_model = partial["ollama_model"]
+        threading.Thread(
+            target=ensure_ollama,
+            args=(new_model,),
+            daemon=True
+        ).start()
+
+    print(f"[CONFIG] Settings updated: {partial}")
+    _broadcast_sync({"type": "config", **_current_config})
+
+
+
 # ─────────────────────────────────────────────
 #  WebSocket Server
 # ─────────────────────────────────────────────
@@ -34,11 +69,23 @@ async def _ws_handler(websocket):
         async for raw in websocket:
             try:
                 msg = json.loads(raw)
+
                 if msg.get("type") == "caption":
                     text = msg.get("text", "").strip()
                     if text:
                         with _caption_lock:
                             _caption_queue.append(text)
+
+                elif msg.get("type") == "settings":
+                    # Strip the type key and apply the rest as settings
+                    partial = {k: v for k, v in msg.items() if k != "type"}
+                    _apply_settings(partial)
+
+                elif msg.get("type") == "get_config":
+                    # Dashboard just connected — send current config back
+                    reply = json.dumps({"type": "config", **_current_config})
+                    await websocket.send(reply)
+
             except json.JSONDecodeError:
                 pass
     except (websockets.exceptions.ConnectionClosedOK,
@@ -46,7 +93,7 @@ async def _ws_handler(websocket):
         pass
     finally:
         _ws_clients.discard(websocket)
-        print(f"[WS] Extension disconnected — {len(_ws_clients)} client(s))")
+        print(f"[WS] Extension disconnected — {len(_ws_clients)} client(s)")
 
 
 async def _ws_broadcast(payload: dict):
@@ -63,7 +110,6 @@ async def _ws_broadcast(payload: dict):
 
 
 def _broadcast_sync(payload: dict):
-    """Schedule a broadcast from any thread."""
     if _ws_loop and _ws_clients:
         asyncio.run_coroutine_threadsafe(_ws_broadcast(payload), _ws_loop)
 
@@ -71,7 +117,7 @@ def _broadcast_sync(payload: dict):
 async def _ws_serve():
     async with websockets.serve(_ws_handler, WS_HOST, WS_PORT):
         print(f"[WS] Server listening on ws://{WS_HOST}:{WS_PORT}")
-        await asyncio.get_event_loop().create_future()  # run forever
+        await asyncio.get_event_loop().create_future()
 
 
 def _start_ws_thread():
@@ -88,9 +134,15 @@ def _start_ws_thread():
 
 def run_system(callback=None, source="webcam"):
 
+    cfg   = _config.load()
+    model = cfg.get("ollama_model", "llama3.2:3b")
+    ollama_ready = ensure_ollama(model)
+    if not ollama_ready:
+        print("[SOVA] Continuing without Ollama — template descriptions will be used.")
+
     ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
     ws_thread.start()
-    time.sleep(0.5)  # Give server time to bind
+    time.sleep(0.5)
 
     if source == "screen":
         get_frame = getScreenFrame
@@ -101,9 +153,13 @@ def run_system(callback=None, source="webcam"):
         mirror    = True
         print("[SOVA] Monitoring Webcam...")
 
+    # ── initialise display state so overlay never crashes before first flush ──
     display_expr      = "Neutral"
     display_gest      = "No Gesture"
     display_act       = "Person Center"
+    display_sentiment = "neutral"
+    display_conf      = 0.0
+    display_desc      = "Waiting for first analysis..."
 
     print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
 
@@ -145,15 +201,20 @@ def run_system(callback=None, source="webcam"):
         with _caption_lock:
             pending_captions = _caption_queue.copy()
             _caption_queue.clear()
-        
-        # 5. Flush every 5 s
-        stable_results = flushAll(captions=pending_captions)   # ← pass captions in
+
+        # 5. Flush every N seconds
+        stable_results = flushAll(captions=pending_captions)
         if stable_results:
-            expr, gest, act, sentiment, sent_conf, description = stable_results  # ← unpack values
-        
-            display_expr, display_gest, display_act = expr, gest, act
-    
-        
+            expr, gest, act, sentiment, sent_conf, description = stable_results
+
+            # Update display state
+            display_expr      = expr
+            display_gest      = gest
+            display_act       = act
+            display_sentiment = sentiment
+            display_conf      = sent_conf
+            display_desc      = description
+
             _broadcast_sync({
                 "type":             "result",
                 "expression":       expr,
@@ -161,24 +222,20 @@ def run_system(callback=None, source="webcam"):
                 "action":           act,
                 "sentiment":        sentiment,
                 "sentimentConf":    sent_conf,
-                "description":      description,  
+                "summary":          description,      # dashboard reads msg.summary
             })
 
-            if callback:
-                callback(expr, gest, act, f"Detected {expr}")
+            speak(description)
 
-            threading.Thread(target=speak, args=(description,), daemon=True).start()
-
-        # 6. Visual Overlay
+        # 6. Visual Overlay — always uses display_ vars, never crashes
         overlay_lines = [
             f"Expression:  {display_expr}",
             f"Gesture:     {display_gest}",
             f"Action:      {display_act}",
-            f"Sentiment:   {sentiment} ({sent_conf:.0%})",
-            f"Description: {description}",
+            f"Sentiment:   {display_sentiment} ({display_conf:.0%})",
+            f"Description: {display_desc}",
             f"WS clients:  {len(_ws_clients)}",
         ]
-
         for i, line in enumerate(overlay_lines):
             cv2.putText(frame, line, (20, h - 30 - (i * 35)),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)

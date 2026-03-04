@@ -4,7 +4,7 @@ mss
 numpy
 flask
 flask-cors
-pyttsx3
+pyttsx3>=2.90 ; sys_platform != "darwin"
 ultralytics
 websockets>=12.0
 transformers>=4.40.0

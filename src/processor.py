@@ -3,7 +3,7 @@ from collections import defaultdict
 from src.nlp_engine import analyze as nlp_analyze
 from src.description_engine import summarize, _confidence_tier
 
-INTERVAL = 5.0  # seconds
+INTERVAL = 15.0  # seconds
 
 _next_flush_time = time.time() + INTERVAL
 
@@ -130,6 +130,12 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     print(f"{'='*50}\n")
 
     return expression, gesture, action, sentiment, sent_conf, description
+
+
+def set_interval(seconds: float):
+    global INTERVAL, _next_flush_time
+    INTERVAL = seconds
+    print(f"[PROCESSOR] Flush interval set to {seconds}s")
 
 
 # ── Internal ───────────────────────────────────────────────────────────────────

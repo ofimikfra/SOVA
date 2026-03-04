@@ -11,10 +11,11 @@ Requirements:
 """
 
 import requests
+from src import config as _cfg
 
 OLLAMA_URL   = "http://localhost:11434/api/generate"
-OLLAMA_MODEL = "llama3.2:3b"   # swap to "mistral" or "llama3.2:1b" if needed
-TIMEOUT_S    = 4.0             # max wait before falling back to template
+TIMEOUT_S    = 15.0             # max wait before falling back to template
+
 
 # ── Prompt ────────────────────────────────────────────────────────────────────
 
@@ -67,32 +68,32 @@ def _build_prompt(expression: str, gesture: str,
 # ── Ollama call ───────────────────────────────────────────────────────────────
 
 def _call_ollama(prompt: str) -> str | None:
+    model = _cfg.load().get("ollama_model", "llama3.2:3b")  # live from config
     try:
         resp = requests.post(
             OLLAMA_URL,
             json={
-                "model":  OLLAMA_MODEL,
+                "model":  model,
                 "prompt": prompt,
                 "stream": False,
                 "options": {
                     "temperature": 0.7,
-                    "num_predict": 40,  # cap tokens → keeps output short & fast
+                    "num_predict": 40,
                 },
             },
             timeout=TIMEOUT_S,
         )
         resp.raise_for_status()
         text = resp.json().get("response", "").strip()
-        # Strip any leading label the model might add ("Description: ...")
         if text.lower().startswith("description:"):
             text = text[len("description:"):].strip()
         return text if text else None
     except requests.exceptions.ConnectionError:
-        print("[SUMMARY] Ollama not running — using template fallback")
+        print("[DESCRIPTION] Ollama not running — using template fallback")
     except requests.exceptions.Timeout:
-        print("[SUMMARY] Ollama timed out — using template fallback")
+        print("[DESCRIPTION] Ollama timed out — using template fallback")
     except Exception as e:
-        print(f"[SUMMARY] Ollama error: {e} — using template fallback")
+        print(f"[DESCRIPTION] Ollama error: {e} — using template fallback")
     return None
 
 
@@ -107,7 +108,7 @@ _TEMPLATES = {
     ("Frowning",        "neutral"):  "The person is deep in thought.",
     ("Eyebrows Raised", "positive"): "The person looks pleasantly surprised.",
     ("Eyebrows Raised", "negative"): "The person seems startled or worried.",
-    ("Mouth Open",      "positive"): "The person is animated and engaged.",
+    ("Mouth Open",      "positive"): "The person is surprised or animated.",
     ("Mouth Open",      "negative"): "The person looks shocked or taken aback.",
     ("Left Wink",       "positive"): "The person seems playful and lighthearted.",
     ("Right Wink",      "positive"): "The person seems playful and lighthearted.",

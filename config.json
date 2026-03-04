@@ -1,0 +1,5 @@
+{
+  "ollama_model": "llama3.2:3b",
+  "flush_interval": 5,
+  "tts_enabled": true
+}
