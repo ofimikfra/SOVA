@@ -64,6 +64,7 @@ def main():
         height           = 860,
         min_size         = (480, 600),
         background_color = "#0f0f0f",
+        easy_drag = False,
     )
 
     webview.start(debug=False)
