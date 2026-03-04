@@ -132,17 +132,20 @@ def _start_ws_thread():
 #  Main Detection Loop
 # ─────────────────────────────────────────────
 
-def run_system(callback=None, source="webcam"):
+def run_system(callback=None, source="webcam", headless=False, stop_event: threading.Event | None = None):
+
+    if stop_event is None:
+        stop_event = threading.Event()
+
+    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
+    ws_thread.start()
+    time.sleep(0.5)
 
     cfg   = _config.load()
     model = cfg.get("ollama_model", "llama3.2:3b")
     ollama_ready = ensure_ollama(model)
     if not ollama_ready:
         print("[SOVA] Continuing without Ollama — template descriptions will be used.")
-
-    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
-    ws_thread.start()
-    time.sleep(0.5)
 
     if source == "screen":
         get_frame = getScreenFrame
@@ -153,17 +156,19 @@ def run_system(callback=None, source="webcam"):
         mirror    = True
         print("[SOVA] Monitoring Webcam...")
 
-    # ── initialise display state so overlay never crashes before first flush ──
     display_expr      = "Neutral"
     display_gest      = "No Gesture"
     display_act       = "Person Center"
     display_sentiment = "neutral"
     display_conf      = 0.0
     display_desc      = "Waiting for first analysis..."
+    dashboard_visible = True
 
-    print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
+    print("[SOVA] Engine Active.")
+    if not headless:
+        print("[SOVA] Press 'q' on the video window to stop.")
 
-    while True:
+    while not stop_event.is_set():
         frame = get_frame()
         if frame is None:
             continue
@@ -181,12 +186,13 @@ def run_system(callback=None, source="webcam"):
         if results.face_landmarks:
             for face_landmarks in results.face_landmarks:
                 raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
-                xs = [lm.x * w for lm in face_landmarks]
-                ys = [lm.y * h for lm in face_landmarks]
-                cv2.rectangle(frame,
-                    (int(min(xs)), int(min(ys))),
-                    (int(max(xs)), int(max(ys))),
-                    (0, 255, 0), 2)
+                if not headless:
+                    xs = [lm.x * w for lm in face_landmarks]
+                    ys = [lm.y * h for lm in face_landmarks]
+                    cv2.rectangle(frame,
+                        (int(min(xs)), int(min(ys))),
+                        (int(max(xs)), int(max(ys))),
+                        (0, 255, 0), 2)
 
         # 2. Gestures & Body Actions
         raw_gest,   gest_conf   = detectGesture(frame)
@@ -207,13 +213,15 @@ def run_system(callback=None, source="webcam"):
         if stable_results:
             expr, gest, act, sentiment, sent_conf, description = stable_results
 
-            # Update display state
             display_expr      = expr
             display_gest      = gest
             display_act       = act
             display_sentiment = sentiment
             display_conf      = sent_conf
             display_desc      = description
+
+            if gest == "Thumbs Up":
+                dashboard_visible = not dashboard_visible
 
             _broadcast_sync({
                 "type":             "result",
@@ -222,29 +230,37 @@ def run_system(callback=None, source="webcam"):
                 "action":           act,
                 "sentiment":        sentiment,
                 "sentimentConf":    sent_conf,
-                "summary":          description,      # dashboard reads msg.summary
+                "summary":          description,
+                "dashboardVisible": dashboard_visible,
             })
+
+            if callback:
+                callback(expr, gest, act, description)
 
             speak(description)
 
-        # 6. Visual Overlay — always uses display_ vars, never crashes
-        overlay_lines = [
-            f"Expression:  {display_expr}",
-            f"Gesture:     {display_gest}",
-            f"Action:      {display_act}",
-            f"Sentiment:   {display_sentiment} ({display_conf:.0%})",
-            f"Description: {display_desc}",
-            f"WS clients:  {len(_ws_clients)}",
-        ]
-        for i, line in enumerate(overlay_lines):
-            cv2.putText(frame, line, (20, h - 30 - (i * 35)),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+        # 6. CV window — only when not headless
+        if not headless:
+            overlay_lines = [
+                f"Expression:  {display_expr}",
+                f"Gesture:     {display_gest}",
+                f"Action:      {display_act}",
+                f"Sentiment:   {display_sentiment} ({display_conf:.0%})",
+                f"Description: {display_desc}",
+                f"WS clients:  {len(_ws_clients)}",
+            ]
+            for i, line in enumerate(overlay_lines):
+                cv2.putText(frame, line, (20, h - 30 - (i * 35)),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
 
-        cv2.imshow("SOVA", frame)
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            cv2.imshow("SOVA", frame)
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
 
-    cv2.destroyAllWindows()
+    if not headless:
+        cv2.destroyAllWindows()
+
+    print("[SOVA] Engine stopped.")
 
 
 if __name__ == "__main__":

@@ -364,6 +364,24 @@
       clip:       rect(0,0,0,0);
       white-space: nowrap;
     }
+
+    #start-btn {
+      padding:       8px 20px;
+      border:        none;
+      border-radius: 8px;
+      font-weight:   700;
+      font-size:     0.85rem;
+      cursor:        pointer;
+      transition:    background 0.2s, transform 0.1s;
+      background:    var(--accent);
+      color:         #000;
+    }
+    #start-btn:hover  { background: #00e676; }
+    #start-btn:active { transform: scale(0.97); }
+    #start-btn[data-running="true"] {
+      background: var(--warn);
+      color:      #fff;
+    }
   </style>
 </head>
 
@@ -381,12 +399,22 @@
         <div class="logo-dot" aria-hidden="true"></div>
         SOVA
       </div>
-      <div id="status-pill"
-           role="status"
-           aria-label="Connection status: disconnected"
-           data-status="disconnected">
-        <div class="status-dot" aria-hidden="true"></div>
-        <span id="status-text">Not connected</span>
+    
+      <div style="display:flex; align-items:center; gap:10px;">
+        <!-- Start / Stop button — only shown when running as desktop app -->
+        <button id="start-btn"
+                aria-label="Start SOVA engine"
+                style="display:none">
+          Start
+        </button>
+      
+        <div id="status-pill"
+             role="status"
+             aria-label="Connection status: disconnected"
+             data-status="disconnected">
+          <div class="status-dot" aria-hidden="true"></div>
+          <span id="status-text">Not connected</span>
+        </div>
       </div>
     </header>
 
@@ -502,6 +530,49 @@
     const modelSelect   = document.getElementById("ollama-model");
     const saveBtn       = document.getElementById("save-btn");
     const saveStatus    = document.getElementById("save-status");
+
+    // ── Desktop app bridge ────────────────────────────────────────────────────
+    // window.pywebview is only defined when running inside the PyWebView app.
+    // When opened directly in a browser (extension context) it's undefined
+    // and the Start button stays hidden — so the same file works in both contexts.
+
+    const startBtn = document.getElementById("start-btn");
+    let engineRunning = false;
+
+    async function initDesktopApp() {
+      if (typeof window.pywebview === "undefined") return;
+    
+      // Show the start button — we're inside the desktop app
+      startBtn.style.display = "block";
+    
+      // Sync initial state
+      const status = await window.pywebview.api.get_status();
+      setEngineState(status.running);
+    }
+
+    function setEngineState(running) {
+      engineRunning = running;
+      startBtn.textContent          = running ? "Stop SOVA" : "Start SOVA";
+      startBtn.ariaLabel            = running ? "Stop SOVA engine" : "Start SOVA engine";
+      startBtn.dataset.running      = running;
+    }
+
+    startBtn.addEventListener("click", async () => {
+      if (typeof window.pywebview === "undefined") return;
+    
+      if (!engineRunning) {
+        const result = await window.pywebview.api.start();
+        if (result.ok) setEngineState(true);
+      } else {
+        const result = await window.pywebview.api.stop();
+        if (result.ok) setEngineState(false);
+      }
+    });
+
+    // Wait for pywebview to be ready before calling the API
+    window.addEventListener("pywebviewready", initDesktopApp);
+    // Fallback — pywebviewready sometimes fires before listener attached
+    if (typeof window.pywebview !== "undefined") initDesktopApp();
 
     // ── WebSocket ─────────────────────────────────────────────────────────
     function connect() {

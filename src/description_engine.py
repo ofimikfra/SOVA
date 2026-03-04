@@ -1,38 +1,10 @@
-"""
-SOVA Summary Engine
-Generates a human-like description of the user's current state using
-a local Ollama model. Falls back to a rule-based template if Ollama
-is unavailable.
-
-Requirements:
-  1. Install Ollama: https://ollama.com/download
-  2. Pull the model: ollama pull llama3.2:3b
-  3. Ollama must be running before SOVA starts: ollama serve
-"""
-
 import requests
 from src import config as _cfg
 
-OLLAMA_URL   = "http://localhost:11434/api/generate"
-TIMEOUT_S    = 15.0             # max wait before falling back to template
+OLLAMA_URL = "http://localhost:11434/api/generate"
+TIMEOUT_S  = 15.0
 
-
-# ── Prompt ────────────────────────────────────────────────────────────────────
-
-_SYSTEM = (
-    "You are a concise observer describing a person's current state "
-    "during a video call. Write exactly ONE natural sentence (max 20 words). "
-    "No lists, no labels, no punctuation beyond the final period. "
-    "Sound human and conversational, not clinical."
-)
-
-_CONFIDENCE_INSTRUCTION = {
-    "low":    "You are NOT confident in these signals. Use uncertain language like "
-              "'it seems like', 'possibly', or 'it looks like'.",
-    "medium": "You are moderately confident. Use hedged language like "
-              "'it appears that' or 'they seem to be'.",
-    "high":   "You are fully confident. Speak directly with no hedging.",
-}
+# ── Confidence tier — internal only, never shown to the model ─────────────────
 
 def _confidence_tier(conf: float) -> str:
     if conf < 0.65:
@@ -41,34 +13,67 @@ def _confidence_tier(conf: float) -> str:
         return "medium"
     return "high"
 
+
+# ── System prompt ─────────────────────────────────────────────────────────────
+
+_SYSTEM = (
+    "You describe a person on a video call in one short, casual sentence. "
+    "Maximum 12 words. "
+    "Third-person only — 'The person', 'They', or 'Their'. "
+    "Never use: 'I', 'but', 'however', 'although', 'confidence', 'uncertain', 'unsure', 'despite'. "
+    "Never mention confidence, certainty, or your own limitations. "
+    "Never add anything after the final period."
+)
+
+# The model only sees the tone instruction — not the word "confidence"
+_TONE = {
+    "low":    "Use soft observational words: 'seems', 'looks', 'might be', 'appears'.",
+    "medium": "Use mild language: 'appears to be', 'seems to be', 'looks like'.",
+    "high":   "Be direct and factual. No hedging words.",
+}
+
+_EXAMPLES = {
+    "low":    "Example: 'The person seems a little distracted.'",
+    "medium": "Example: 'They appear to be engaged and listening.'",
+    "high":   "Example: 'The person is smiling and nodding.'",
+}
+
+
+# ── Prompt builder ────────────────────────────────────────────────────────────
+
 def _build_prompt(expression: str, gesture: str,
                   action: str, sentiment: str, overall_conf: float) -> str:
-    tier        = _confidence_tier(overall_conf)
-    conf_instruction = _CONFIDENCE_INSTRUCTION[tier]
+    tier = _confidence_tier(overall_conf)
 
     gesture_line = f"Gesture: {gesture}" if gesture != "No Gesture" else ""
     action_line  = f"Body:    {action}"  if action  != "Person Center" else ""
 
-    lines = filter(None, [
+    signals = "\n".join(filter(None, [
         f"Expression: {expression}",
         gesture_line,
         action_line,
         f"Sentiment:  {sentiment}",
-        f"Confidence: {overall_conf:.0%}",
-    ])
+    ]))
+
     return (
         f"{_SYSTEM}\n"
-        f"{conf_instruction}\n\n"
-        f"Observed signals:\n"
-        + "\n".join(lines)
-        + "\n\nDescription:"
+        f"{_TONE[tier]} {_EXAMPLES[tier]}\n\n"
+        f"Signals:\n{signals}\n\n"
+        f"One sentence. End with a period. Nothing after it.\n"
+        f"Description:"
     )
 
 
 # ── Ollama call ───────────────────────────────────────────────────────────────
 
+_BAD_PHRASES = (
+    "i think", "i feel", "i believe", "i'm not", "i cant", "i can't",
+    "i notice", "confidence", "uncertain", "not sure",
+    "but it", "but their", "but the", "however", "although", "despite", "levels", "level",
+)
+
 def _call_ollama(prompt: str) -> str | None:
-    model = _cfg.load().get("ollama_model", "llama3.2:3b")  # live from config
+    model = _cfg.load().get("ollama_model", "llama3.2:3b")
     try:
         resp = requests.post(
             OLLAMA_URL,
@@ -77,17 +82,32 @@ def _call_ollama(prompt: str) -> str | None:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.7,
-                    "num_predict": 40,
+                    "temperature": 0.4,  # low = obedient, less rambling
+                    "num_predict": 30,   # 12 words ≈ 18 tokens, 30 is a safe cap
                 },
             },
             timeout=TIMEOUT_S,
         )
         resp.raise_for_status()
         text = resp.json().get("response", "").strip()
+
+        # Strip label if model echoes it back
         if text.lower().startswith("description:"):
             text = text[len("description:"):].strip()
-        return text if text else None
+
+        # Keep only the first sentence
+        if "." in text:
+            text = text[:text.index(".") + 1]
+
+        # Discard if any banned phrase survived
+        lower = text.lower()
+        for phrase in _BAD_PHRASES:
+            if phrase in lower:
+                print(f"[DESCRIPTION] Rejected — contained '{phrase}': {text}")
+                return None  # fall through to template
+
+        return text.strip() if text.strip() else None
+
     except requests.exceptions.ConnectionError:
         print("[DESCRIPTION] Ollama not running — using template fallback")
     except requests.exceptions.Timeout:
@@ -98,7 +118,6 @@ def _call_ollama(prompt: str) -> str | None:
 
 
 # ── Template fallback ─────────────────────────────────────────────────────────
-# Used when Ollama is unavailable. Covers the most common signal combinations.
 
 _TEMPLATES = {
     ("Smiling",         "positive"): "The person is engaged and happy.",
@@ -136,7 +155,7 @@ _ACTION_SUFFIX = {
 _CONFIDENCE_PREFIX = {
     "low":    "It seems like ",
     "medium": "It appears that ",
-    "high":   "", 
+    "high":   "",
 }
 
 def _template_fallback(expression: str, gesture: str,
@@ -144,7 +163,7 @@ def _template_fallback(expression: str, gesture: str,
                        overall_conf: float) -> str:
     base = _TEMPLATES.get(
         (expression, sentiment),
-        "the person's state is unclear."   # lowercase — prefix prepended below
+        "the person's state is unclear."
     )
 
     suffix = ""
@@ -158,7 +177,6 @@ def _template_fallback(expression: str, gesture: str,
     prefix = _CONFIDENCE_PREFIX[tier]
 
     if prefix:
-        # Lowercase the first letter of base so it flows after the prefix
         base = base[0].lower() + base[1:]
 
     return prefix + base + suffix
@@ -169,20 +187,13 @@ def _template_fallback(expression: str, gesture: str,
 def summarize(expression: str, gesture: str,
               action: str, sentiment: str,
               overall_conf: float) -> str:
-    """
-    Returns a one-sentence human-like description of the person's state.
-    Language certainty scales with overall_conf:
-      < 0.65  → vague   ("it seems like...")
-      < 0.85  → hedged  ("it appears that...")
-      ≥ 0.85  → direct  ("The person is...")
-    """
     prompt = _build_prompt(expression, gesture, action, sentiment, overall_conf)
     result = _call_ollama(prompt)
 
     if result:
-        print(f"[SUMMARY] Ollama ({_confidence_tier(overall_conf)}): {result}")
+        print(f"[DESCRIPTION] Ollama ({_confidence_tier(overall_conf)}): {result}")
         return result
 
     result = _template_fallback(expression, gesture, action, sentiment, overall_conf)
-    print(f"[SUMMARY] Template ({_confidence_tier(overall_conf)}): {result}")
+    print(f"[DESCRIPTION] Template ({_confidence_tier(overall_conf)}): {result}")
     return result
