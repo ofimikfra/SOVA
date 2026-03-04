@@ -1,35 +1,28 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOVA Menu</title>
-    <script>
-  document.querySelector('.primary').onclick = () => {
-    fetch('http://127.0.0.1:5000/start')
-      .then(response => response.json())
-      .then(data => {
-        console.log("Python script triggered!");
-        alert("SOVA Assistance Starting...");
-      })
-      .catch(err => alert("Make sure your Python server is running!"));
-  };
-    </script>
+  <meta charset="UTF-8">
+  <title>SOVA</title>
+  <link rel="stylesheet" href="popup.css">
 </head>
 <body>
+  <div class="header">
+    <div class="dot" id="dot" aria-hidden="true"></div>
+    <span class="logo">SOVA</span>
+    <span id="status" class="status" role="status" aria-live="polite">Not connected</span>
+  </div>
 
-    <div class="menu-container">
-        <img src="logo.png" alt="Sova Logo"  class="logo">
+  <div id="latest"
+       class="latest"
+       aria-label="Latest description"
+       aria-live="polite">
+    Waiting for SOVA...
+  </div>
 
-        <h1>SOVA</h1>
+  <button id="open-dash" aria-label="Open SOVA dashboard">
+    Open Dashboard
+  </button>
 
-        <div class="button-stack">
-            <button class="btn">Start Call Assistance</button>
-            <button class="btn">Language Options</button>
-            <button class="btn">Settings</button>
-            <button class="btn">Tutorial</button>
-        </div>
-    </div>
-
+  <script src="popup.js"></script>
 </body>
 </html>

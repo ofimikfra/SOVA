@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="dashboard.css">
+  <title>SOVA Dashboard</title>
+</head>
+
+<body>
+  <a href="#main" class="skip-link">Skip to main content</a>
+
+  <!-- Screen reader live region — announces new descriptions automatically -->
+  <div id="sr-live" aria-live="polite" aria-atomic="true" role="status"></div>
+
+  <div class="page" id="main">
+
+    <!-- Header -->
+    <header>
+      <div class="logo" role="banner">
+        <div class="logo-dot" aria-hidden="true"></div>
+        SOVA
+      </div>
+    
+      <div style="display:flex; align-items:center; gap:10px;">
+        <!-- Start / Stop button — only shown when running as desktop app -->
+        <button id="start-btn"
+                aria-label="Start SOVA engine"
+                style="display:none">
+          Start
+        </button>
+      
+        <div id="status-pill"
+             role="status"
+             aria-label="Connection status: disconnected"
+             data-status="disconnected">
+          <div class="status-dot" aria-hidden="true"></div>
+          <span id="status-text">Not connected</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Latest Description -->
+    <section class="card" aria-labelledby="desc-heading">
+      <div class="card-title" id="desc-heading">Latest Description</div>
+      <p id="description-text"
+         class="placeholder"
+         aria-label="Latest SOVA description">
+        Waiting for SOVA...
+      </p>
+      <div id="description-conf" aria-label="Confidence level">
+        <span id="conf-label">—</span>
+        <div class="conf-bar-track" role="progressbar"
+             aria-valuenow="0" aria-valuemin="0" aria-valuemax="100"
+             aria-label="Confidence">
+          <div class="conf-bar-fill" id="conf-bar"></div>
+        </div>
+        <span id="conf-pct"></span>
+      </div>
+    </section>
+
+    <!-- Feed -->
+    <section class="card" aria-labelledby="feed-heading">
+      <div class="card-title" id="feed-heading">Description Feed</div>
+      <ol id="feed" aria-label="History of SOVA descriptions" aria-live="polite">
+        <!-- Feed items injected by JS -->
+      </ol>
+    </section>
+
+    <!-- Settings -->
+    <section class="card" aria-labelledby="settings-heading">
+      <div class="card-title" id="settings-heading">Settings</div>
+      <div class="settings-grid">
+
+        <!-- TTS toggle -->
+        <div class="setting-row">
+          <div class="setting-label">
+            <strong>Text-to-Speech</strong>
+            <span>Speak descriptions aloud</span>
+          </div>
+          <label class="toggle" aria-label="Text-to-speech toggle">
+            <input type="checkbox" id="tts-toggle" checked>
+            <div class="toggle-track"></div>
+          </label>
+        </div>
+
+        <!-- Flush interval -->
+        <div class="setting-row">
+          <div class="setting-label">
+            <strong>Analysis Interval</strong>
+            <span>How often SOVA analyses</span>
+          </div>
+          <div class="range-row">
+            <input type="range" id="flush-interval"
+                   min="3" max="30" step="1" value="5"
+                   aria-label="Analysis interval in seconds"
+                   aria-valuemin="3" aria-valuemax="30" aria-valuenow="5">
+            <span class="range-value" id="interval-display"
+                  aria-live="polite" aria-atomic="true">5s</span>
+          </div>
+        </div>
+
+        <!-- Ollama model -->
+        <div class="setting-row">
+          <div class="setting-label">
+            <strong>Ollama Model</strong>
+            <span>Local LLM for descriptions</span>
+          </div>
+          <select id="ollama-model" aria-label="Select Ollama model">
+            <option value="llama3.2:3b">llama3.2:3b (recommended)</option>
+            <option value="llama3.2:1b">llama3.2:1b (fastest)</option>
+            <option value="mistral">mistral (balanced)</option>
+            <option value="llama3:8b">llama3:8b (best quality)</option>
+          </select>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:6px; align-items:flex-end;">
+          <button id="save-btn" aria-label="Save settings">Save Settings</button>
+          <span id="save-status" aria-live="polite" aria-atomic="true"></span>
+        </div>
+
+      </div>
+    </section>
+
+  </div><!-- /.page -->
+
+  <script src="dashboard.js"></script>
+  
+</body>
+</html>
+
+<!--
+TODO: Change default flush interval to 30s
+maybe add option for user to set it to 0 for "flush on demand" (button in dashboard that triggers immediate flush)
+fix css to fit sova  color palette + logo
+add loading status while sova loads & processes
+IMPORTANT: add keyboard navigation support for all interactive elements (tabindex, ARIA roles, etc.)
+-->

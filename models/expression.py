@@ -1,9 +1,27 @@
-import numpy as np
+import os
 import mediapipe as mp
+import numpy as np
 from mediapipe.tasks import python
 from mediapipe.tasks.python import vision
 
+FaceLandmarker = vision.FaceLandmarker
+FaceLandmarkerOptions = vision.FaceLandmarkerOptions
+BaseOptions = python.BaseOptions
 
+CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODEL_PATH = os.path.join(CURRENT_DIR, 'face_landmarker.task')
+
+if not os.path.exists(MODEL_PATH):
+    print(f"CRITICAL ERROR: Could not find model at {MODEL_PATH}")
+else:
+    print(f"SUCCESS: Model found at {MODEL_PATH}")
+
+base_options = python.BaseOptions(model_asset_path=MODEL_PATH)
+options = FaceLandmarkerOptions(
+    base_options=base_options,
+    output_face_blendshapes=True,
+    running_mode=mp.tasks.vision.RunningMode.IMAGE
+)
 base_options = python.BaseOptions(model_asset_path="models/face_landmarker.task")
 options = vision.FaceLandmarkerOptions(
     base_options=base_options,
@@ -14,7 +32,7 @@ options = vision.FaceLandmarkerOptions(
     min_face_presence_confidence=0.5,
     min_tracking_confidence=0.5
 )
-face_mesh = vision.FaceLandmarker.create_from_options(options)
+face_mesh = FaceLandmarker.create_from_options(options)
 
 # landmark indices
 

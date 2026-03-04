@@ -2,41 +2,34 @@
   "manifest_version": 3,
   "name": "SOVA",
   "version": "1.0",
-  "description": "Real-time facial expression and gesture description for Google Meet participants.",
-
+  "description": "Real-time expression and sentiment analysis for video calls.",
   "permissions": [
-    "storage",
+    "tabs",
     "activeTab",
-    "tabCapture"
+    "alarms"
   ],
-  "web_accessible_resources": [
-  {
-    "resources": ["logo.png"],
-    "matches": ["https://meet.google.com/*"]
-  }
-  ],
-
   "host_permissions": [
-    "https://meet.google.com/*",
-    "http://127.0.0.1:5000/*"
+    "https://meet.google.com/*"
   ],
-
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "content_scripts": [
     {
       "matches": ["https://meet.google.com/*"],
       "js": ["content.js"],
-      "css": ["styles.css"],
       "run_at": "document_idle"
     }
   ],
-
-  "background": {
-    "service_worker": "background.js"
-  },
-
   "action": {
-    "default_popup": "index.html",
-    "default_title": "SOVA",
-    "default_icon": "logo.png"
-  }
+    "default_popup": "popup.html",
+    "default_title": "SOVA"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["logo.png", "dashboard.html", "styles.css", "dashboard.js"],
+      "matches": ["<all_urls>"]
+    }
+  ]
 }
