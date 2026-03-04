@@ -5,6 +5,8 @@ Requirement for CSIT321 Capstone Project
 
 ## Features
 - Facial expression & gesture detection.
+- WebSocket results include both `description` and a new `summary` field
+  (used by the dashboard/popup UI).
 
 ## How to run
 pip install -r requirements.txt

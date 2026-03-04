@@ -29,8 +29,12 @@ function connect() {
   socket.addEventListener("message", (e) => {
     try {
       const msg = JSON.parse(e.data);
-      if (msg.type === "result" && msg.summary) {
-        latest.textContent = msg.summary;
+      if (msg.type === "result") {
+        // support either `summary` (preferred) or legacy `description`
+        const text = msg.summary ?? msg.description;
+        if (text) {
+          latest.textContent = text;
+        }
       }
     } catch (_) {}
   });

@@ -34,12 +34,13 @@ _CONFIDENCE_INSTRUCTION = {
         "You MUST use uncertain words: "
         "'seems', 'appears', 'might be', 'looks like'. "
         "NEVER use certain words like 'is', 'looks happy', 'clearly', 'genuinely'. "
-        "DO NOT mention the low confidence level."
+        "DO NOT say that the confidence level is low."
     ),
     "medium": (
         "Use hedged language only: "
         "'appears to be', 'seems to be', 'looks like they'. "
         "NEVER use 'is' as a certainty. "
+        "DO NOT say that the confidence level is low."
     ),
     "high": (
         "Be direct, no hedging words. "

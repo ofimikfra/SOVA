@@ -718,6 +718,16 @@ class TestCaptionSentiment:
         assert result_with    is not None and isinstance(result_with[5],    str)
         assert result_without is not None and isinstance(result_without[5], str)
         assert len(result_with[5].strip())    > 0
+
+    def test_run_system_source_mentions_summary(self):
+        """The `run_system` implementation should include the word
+        ``"summary"`` when constructing the payload sent to clients.  This
+        guards against regressions where the key is accidentally removed.
+        """
+        import inspect, main
+
+        src = inspect.getsource(main.run_system)
+        assert '"summary"' in src
         assert len(result_without[5].strip()) > 0
 
     # ── NLP label correctly reaches summarize() ────────────────────────────

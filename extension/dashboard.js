@@ -50,7 +50,8 @@ function setStatus(s) {
 // ── Result handler ────────────────────────────
 
 function handleResult(msg) {
-  const summary   = msg.summary   ?? "No description available.";
+  // support both new `summary` field and legacy `description` key
+  const summary   = msg.summary ?? msg.description ?? "No description available.";
   const conf      = msg.sentimentConf ?? 0;
   const sentiment = msg.sentiment ?? "neutral";
 

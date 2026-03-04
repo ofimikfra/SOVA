@@ -27,11 +27,15 @@ function connect() {
   socket.addEventListener("message", (event) => {
     try {
       const msg = JSON.parse(event.data);
+      // ensure older descriptions are exposed as "summary" for the UI
+      if (msg.type === "result" && msg.description && !msg.summary) {
+        msg.summary = msg.description;
+      }
       // Forward results to the Meet tab's content script
       if (msg.type === "result" && _meetTabId !== null) {
         chrome.tabs.sendMessage(_meetTabId, msg).catch(() => {});
       }
-      // Forward config to dashboard tab
+      // Forward config/results to dashboard tab
       if ((msg.type === "result" || msg.type === "config") && _dashboardTabId !== null) {
         chrome.tabs.sendMessage(_dashboardTabId, msg).catch(() => {});
       }
@@ -59,9 +63,7 @@ function sendToApp(payload) {
 }
 
 function broadcastStatus(connected) {
-  // Notify popup if open
   chrome.runtime.sendMessage({ type: "sova_status", connected }).catch(() => {});
-  // Notify Meet tab
   if (_meetTabId !== null) {
     chrome.tabs.sendMessage(_meetTabId, {
       type: "sova_status", connected
@@ -71,7 +73,6 @@ function broadcastStatus(connected) {
 
 
 // ── Message routing ───────────────────────────
-// Receives messages from content.js and popup.js
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
@@ -81,13 +82,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     console.log(`[SOVA BG] Meet tab registered: ${_meetTabId}`);
     sendResponse({ ok: true, connected: socket?.readyState === WebSocket.OPEN });
     return true;
-  }
-
-  // caption from content.js → forward to app
-  if (msg.type === "caption") {
-    sendToApp({ type: "caption", text: msg.text });
-    sendResponse({ ok: true });
-    return;
   }
 
   // settings from dashboard → forward to app

@@ -13,3 +13,6 @@ requests>=2.31.0
 pystray 
 pillow
 webview
+faster-whisper
+sounddevice
+numpy
