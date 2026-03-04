@@ -10,9 +10,12 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 
+tts_lock = threading.Lock()
+
 # threading wrapper
 def voice_worker(text):
-    speak(text)
+    with tts_lock:
+        speak(text)
 def run_system(callback=None, source="webcam"):
 
     # Selection logic based on the Extension's request
@@ -70,14 +73,14 @@ def run_system(callback=None, source="webcam"):
         stable_results = flushAll()
         if stable_results:
             expr, gest, act = stable_results
-            voice_text = f"Detected {expr}"
+            voice_text = f"Detected {expr}, {gest}"
 
             # Update the App.py state so the Chrome Extension sees it!
             if callback:
                 callback(expr, gest, act, voice_text)
 
             # Run TTS
-            threading.Thread(target=speak, args=(voice_text,), daemon=True).start()
+            threading.Thread(target=voice_worker, args=(voice_text,), daemon=True).start()
         # 5. VISUAL OVERLAY
         overlay_lines = [
             f"Expression: {display_expr}",
