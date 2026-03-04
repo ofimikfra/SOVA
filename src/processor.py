@@ -27,6 +27,21 @@ _EXPR_POLARITY = {
     "Neutral":          ( 0.00, 0.0),  # no signal
 }
 
+# ── Expression priority hierarchy ──────────────────────────────────────────────
+# Higher number = higher priority. Applied as a multiplier to accumulated score
+# so a high-priority expression can win even with fewer detections.
+# Only used for expression buffers — gestures/actions are score-only.
+
+_EXPR_PRIORITY = {
+    "Mouth Open":       5,
+    "Left Wink":        4,
+    "Right Wink":       4,
+    "Eyebrows Raised":  3,
+    "Frowning":         2,
+    "Smiling":          2,
+    "Neutral":          1,
+}
+
 
 def _expression_to_sentiment(expression: str) -> tuple[float, float]:
     """Returns (polarity_score, signal_weight) for a given expression label."""
@@ -101,9 +116,14 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     expr_confs    = [c for _, c in _expr_buffer] if _expr_buffer else [1.0]
     avg_expr_conf = sum(expr_confs) / len(expr_confs)
 
-    expression = _getDominant(_expr_buffer,  neutral="Neutral",       label="EXPRESSION")
-    gesture    = _getDominant(_gest_buffer,  neutral="No Gesture",    label="GESTURE")
-    action     = _getDominant(_action_buffer,neutral="Person Center", label="ACTION")
+    expression = _getDominant(
+        _expr_buffer,
+        neutral="Neutral",
+        label="EXPRESSION",
+        priorities=_EXPR_PRIORITY,
+    )
+    gesture = _getDominant(_gest_buffer,  neutral="No Gesture",    label="GESTURE")
+    action  = _getDominant(_action_buffer, neutral="Person Center", label="ACTION")
 
     _expr_buffer.clear()
     _gest_buffer.clear()
@@ -140,7 +160,9 @@ def set_interval(seconds: float):
 
 # ── Internal ───────────────────────────────────────────────────────────────────
 
-def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
+def _getDominant(buffer: list, neutral: str,
+                 label: str = "",
+                 priorities: dict | None = None) -> str:
     if not buffer:
         print(f"  [{label}] Buffer empty → {neutral}")
         return neutral
@@ -152,16 +174,22 @@ def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
         scores[lbl] += conf
         counts[lbl] += 1
 
-    non_neutral = {k: v for k, v in scores.items() if k != neutral}
+    # Apply priority multipliers if provided
+    weighted = {
+        lbl: score * priorities.get(lbl, 1)
+        for lbl, score in scores.items()
+    } if priorities else scores
+
+    non_neutral = {k: v for k, v in weighted.items() if k != neutral}
 
     if non_neutral:
         top           = max(non_neutral, key=non_neutral.get)
         top_score     = non_neutral[top]
-        neutral_score = scores.get(neutral, 0.0)
+        neutral_score = weighted.get(neutral, 0.0)
 
         if neutral_score >= top_score:
             if top_score >= 3.0:
                 return top
             return neutral
 
-    return max(scores, key=scores.get)
+    return max(weighted, key=weighted.get)
