@@ -84,6 +84,22 @@
           </label>
         </div>
 
+        <!-- TTS volume -->
+        <div class="setting-row">
+          <div class="setting-label">
+            <strong>TTS Volume</strong>
+            <span>Use ↑ ↓ arrow keys to adjust</span>
+          </div>
+          <div class="range-row">
+            <input type="range" id="tts-volume"
+                   min="0" max="1" step="0.05" value="0.25"
+                   aria-label="TTS volume"
+                   aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.25">
+            <span class="range-value" id="tts-volume-display"
+                  aria-live="polite" aria-atomic="true">25%</span>
+          </div>
+        </div>
+
         <!-- Flush interval -->
         <div class="setting-row">
           <div class="setting-label">

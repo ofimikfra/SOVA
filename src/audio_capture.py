@@ -27,6 +27,7 @@ _audio_queue: queue.Queue = queue.Queue()
 _stop_event   = threading.Event()
 _capture_thread: threading.Thread | None = None
 _helper_proc:    subprocess.Popen | None = None
+_current_rms: float = 0.0   # updated each chunk, read by tts_engine
 
 
 # -- macOS version check -------------------------------------------------------
@@ -205,8 +206,20 @@ def _screencapturekit_loop():
 
         samples = np.frombuffer(raw_pcm, dtype=np.float32).copy()
 
-        if np.sqrt(np.mean(samples ** 2)) < 0.001:
+        rms = float(np.sqrt(np.mean(samples ** 2)))
+        _current_rms = rms  # always update so duck mode has a live reading
+
+        if rms < 0.001:
             continue
+
+        # Skip transcription queue while TTS is playing, but keep _current_rms
+        # updated above so duck mode can still read the real audio level.
+        try:
+            from src import tts_engine
+            if tts_engine.is_tts_active():
+                continue
+        except Exception:
+            pass
 
         _audio_queue.put(samples)
 
@@ -289,8 +302,18 @@ def _sounddevice_loop(device_index: int, use_wasapi_loopback: bool = False):
             if _stop_event.is_set():
                 break
             samples = audio.flatten()
-            if np.sqrt(np.mean(samples ** 2)) < 0.001:
+            rms = float(np.sqrt(np.mean(samples ** 2)))
+            _current_rms = rms  # always update so duck mode has a live reading
+            if rms < 0.001:
                 continue
+            # Skip transcription queue while TTS is playing, but keep _current_rms
+            # updated above so duck mode can still read the real audio level.
+            try:
+                from src import tts_engine
+                if tts_engine.is_tts_active():
+                    continue
+            except Exception:
+                pass
             _audio_queue.put(samples)
         except Exception as e:
             print(f"[AUDIO] sounddevice error: {e}")
@@ -410,6 +433,11 @@ def stop():
         major, _ = _macos_version()
         if major >= 13:
             _stop_screencapturekit()
+
+
+def get_rms() -> float:
+    """Current audio RMS level. >0.02 typically means someone is speaking."""
+    return _current_rms
 
 
 def get_queue() -> queue.Queue:

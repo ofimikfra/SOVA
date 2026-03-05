@@ -7,8 +7,10 @@
 </head>
 <body>
   <div class="header">
-    <div class="dot" id="dot" aria-hidden="true"></div>
-    <span class="logo">SOVA</span>
+    <span class="logo">
+      <img src="logo.png" alt="SOVA logo" class="logo-img">
+      SOVA
+    </span>
     <span id="status" class="status" role="status" aria-live="polite">Not connected</span>
   </div>
 
@@ -17,6 +19,15 @@
        aria-label="Latest description"
        aria-live="polite">
     Waiting for SOVA...
+  </div>
+
+  <!-- TTS volume -->
+  <div class="volume-row">
+    <span class="vol-label">🔈</span>
+    <input type="range" id="tts-volume"
+           min="0" max="1" step="0.05" value="0.25"
+           aria-label="TTS volume">
+    <span class="vol-value" id="vol-display">25%</span>
   </div>
 
   <button id="open-dash" aria-label="Open SOVA dashboard">
