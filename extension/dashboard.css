@@ -77,9 +77,11 @@ header {
     letter-spacing: 0.04em;
 }
 
-.logo img {
-  width: 30px;
-  height: 30px;
+.logo-dot {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--accentblue);
+    flex-shrink: 0;
 }
 
 /* ── Status pill ── */
