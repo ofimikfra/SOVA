@@ -1,9 +1,9 @@
 import time
 from collections import defaultdict
-from src.nlp_engine import analyze as nlp_analyze
+from models.nlp_engine import analyze as nlp_analyze
 from src.description_engine import summarize, _confidence_tier
 
-INTERVAL = 15.0  # seconds
+INTERVAL = 30.0  # seconds
 
 _next_flush_time = time.time() + INTERVAL
 

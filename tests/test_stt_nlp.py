@@ -23,7 +23,7 @@ import argparse
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-from src.nlp_engine import analyze as nlp_analyze
+from models.nlp_engine import analyze as nlp_analyze
 import src.audio_capture        as audio
 import src.stt_engine as stt
 

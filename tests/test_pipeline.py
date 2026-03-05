@@ -75,7 +75,7 @@ def tier():
 
 @pytest.fixture
 def nlp():
-    from src.nlp_engine import analyze
+    from models.nlp_engine import analyze
     return analyze
 
 
