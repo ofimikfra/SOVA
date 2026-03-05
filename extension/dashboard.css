@@ -2,21 +2,24 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-    --bg:          #0f0f0f;
-    --surface:     #1a1a1a;
-    --surface2:    #242424;
-    --border:      #2e2e2e;
-    --text:        #f0f0f0;
-    --text-muted:  #888;
-    --accent:      #00C853;
-    --accent-dim:  #00843a;
-    --warn:        #FF6B35;
-    --negative:    #ef5350;
-    --positive:    #00C853;
-    --neutral:     #888;
-    --focus:       #4fc3f7;
-    --radius:      12px;
-    --font:        "Inter", "Segoe UI", system-ui, sans-serif;
+    --bg:         #06191E;
+    --surface:    #1f2b2e;
+    --text:       #FDFDFD;
+    --text-muted: #B2B2B2;
+    --warn:       #ff7e57;
+    --accentblue: #2096AF;
+    --accentylw:  #FFC857;
+    --accentmb:   #166479;
+    --accentmy:   #E0A458;
+    --accentlb:   #3FD0EF;
+    --hover:      #3FD0EF;
+    --surface2:   #242424;
+    --border:     #2e2e2e;
+    --negative:   #ef5350;
+    --positive:   #00C853;
+    --neutral:    #888;
+    --radius:     12px;
+    --font:       "Inter", "Segoe UI", system-ui, sans-serif; /* change to poppins */
 }
 
 html { font-size: 16px; }
@@ -35,7 +38,7 @@ body {
 
 /* ── Focus visible for keyboard nav ── */
 :focus-visible {
-    outline: 3px solid var(--focus);
+    outline: 3px solid var(--hover);
     outline-offset: 3px;
     border-radius: 4px;
 }
@@ -45,7 +48,7 @@ body {
     position: absolute;
     top: -100%;
     left: 16px;
-    background: var(--focus);
+    background: var(--hover);
     color: #000;
     padding: 8px 16px;
     border-radius: 4px;
@@ -77,7 +80,7 @@ header {
 .logo-dot {
     width: 12px; height: 12px;
     border-radius: 50%;
-    background: var(--accent);
+    background: var(--accentblue);
     flex-shrink: 0;
 }
 
@@ -95,7 +98,7 @@ header {
     transition: border-color 0.3s, background 0.3s;
 }
 #status-pill[data-status="connected"] {
-    border-color: var(--accent);
+    border-color: var(--accentblue);
     background: rgba(0, 200, 83, 0.08);
 }
 #status-pill[data-status="disconnected"] {
@@ -109,7 +112,7 @@ header {
     transition: background 0.3s;
     flex-shrink: 0;
 }
-[data-status="connected"]    .status-dot { background: var(--accent); }
+[data-status="connected"]    .status-dot { background: var(--accentblue); }
 [data-status="disconnected"] .status-dot { background: var(--warn); }
 
 /* ── Cards ── */
@@ -161,7 +164,7 @@ header {
 .conf-bar-fill {
     height: 100%;
     border-radius: 999px;
-    background: var(--accent);
+    background: var(--accentblue);
     transition: width 0.5s ease;
     width: 0%;
 }
@@ -255,7 +258,7 @@ header {
 .toggle-track {
     position:      absolute;
     inset:         0;
-    background:    var(--surface2);
+    background:    var(--surface2); 
     border-radius: 999px;
     border:        1.5px solid var(--border);
     cursor:        pointer;
@@ -274,14 +277,14 @@ header {
 }
 .toggle input:checked + .toggle-track {
     background:    rgba(0, 200, 83, 0.15);
-    border-color:  var(--accent);
+    border-color:  var(--accentmb);
 }
 .toggle input:checked + .toggle-track::after {
     transform:  translateX(22px);
-    background: var(--accent);
+    background: var(--text);
 }
 .toggle input:focus-visible + .toggle-track {
-    outline:        3px solid var(--focus);
+    outline:        3px solid var(--hover);
     outline-offset: 3px;
 }
 
@@ -296,14 +299,14 @@ select, input[type="range"] {
     cursor:        pointer;
     transition:    border-color 0.2s;
 }
-select:hover, select:focus-visible { border-color: var(--focus); }
+select:hover, select:focus-visible { border-color: var(--hover); }
 select { min-width: 180px; }
 
 input[type="range"] {
     padding:    0;
     width:      130px;
     height:     6px;
-    accent-color: var(--accent);
+    accent-color: var(--accentblue);
     border:     none;
 }
 
@@ -323,17 +326,17 @@ input[type="range"] {
 #save-btn {
     margin-top:    8px;
     padding:       10px 24px;
-    background:    var(--accent);
-    color:         #000;
+    background:    var(--accentblue);
+    color:         var(--text);
     font-weight:   700;
     font-size:     0.9rem;
     border:        none;
     border-radius: 8px;
     cursor:        pointer;
     align-self:    flex-end;
-    transition:    background 0.2s, transform 0.1s;
+    transition:    background 0.2s, transform 0.1s, color 0.2s;
 }
-#save-btn:hover  { background: #00e676; }
+#save-btn:hover  { background: var(--hover); color: var(--bg); }
 #save-btn:active { transform: scale(0.97); }
 #save-btn:disabled {
     background: var(--surface2);
@@ -343,7 +346,7 @@ input[type="range"] {
 
 #save-status {
     font-size:  0.8rem;
-    color:      var(--accent);
+    color:      var(--accentblue);
     min-height: 1.2em;
     text-align: right;
 }
