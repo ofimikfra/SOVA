@@ -2,7 +2,7 @@
 # SOVA
 An AI-powered video conferencing accessibility tool for visually impaired users. Capable of real-time interpretation of non-verbal cues, delivered as audio descriptions.
 
-🌐 [Visit the SOVA website]()
+[Website]() | [LinkedIn]() | [Instagram]()
 
 ![Python](https://img.shields.io/badge/Python-3.11+-blue?logo=python)
 ![Platforms](https://img.shields.io/badge/Platforms-macOS%20%7C%20Windows%20%7C%20Linux-green)
@@ -83,15 +83,15 @@ Once installed, join any Google Meet call. The SOVA overlay appears automaticall
 ## Authors
 SOVA was developed by team **Luminara**
 
-| Name                    | Role                     | GitHub                                     |
-| ----------------------- | ------------------------ | ------------------------------------------ |
-| Aagna Samhita           | Team Leader              | [@eggwtv](https://github.com/eggwtv)       |
-| Samia Khan              | Scribe                   | ...                                        |
-| Sofia Mikaela Francisco | Lead Developer           | [@ofimikfra](https://github.com/ofimikfra) |
-| Anelle Khare            | Computer Vision Engineer | ...                                        |
-| Sandra Jose             | Audio       | ...                                        |
-| Sanura Castellino       | Frontend Developer       | ...                                        |
-| Sara Hayel              | Backend Developer        | ...                                        |
+| Name              | Role                                   | GitHub                                               |
+| ----------------- | -------------------------------------- | ---------------------------------------------------- |
+| Aagna Samhita     | Team Leader / Computer Vision Engineer | [@eggwtv](https://github.com/eggwtv)                 |
+| Samia Khan        | Scribe / Frontend Developer            | [@skellereve-ops](https://github.com/skellereve-ops) |
+| Sofia Francisco   | Lead Developer / Integration Engineer  | [@ofimikfra](https://github.com/ofimikfra)           |
+| Anelle Khare      | Computer Vision Engineer               | [@Ak200523](https://github.com/Ak200523)             |
+| Sandra Jose       | Audio & NLP Engineer                   | [@sandrasuzanne](https://github.com/sandrasuzanne)   |
+| Sanura Castellino | Frontend / Backend Developer           | [@sanuraaa](https://github.com/sanuraaa)             |
+| Sara Hayel        | Backend Developer                      | [@SaraHayel](https://github.com/SaraHayel)           |
 
 ## Acknowledgements
 - [MediaPipe](https://mediapipe.dev/) — face, hand, and pose landmark detection
