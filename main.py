@@ -14,7 +14,7 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 import src.audio_capture        as _audio
-import src.stt_engine as _transcription
+import src.stt_engine as _stt
 
 from src import config as _config
 import src.processor as _processor
@@ -32,9 +32,6 @@ def _apply_settings(partial: dict):
 
     if "tts_enabled" in partial:
         _tts.set_enabled(partial["tts_enabled"])
-
-    if "tts_volume" in partial:
-        _tts.set_volume(float(partial["tts_volume"]), play_test=True)
 
     print(f"[CONFIG] Settings updated: {partial}")
     _broadcast_sync({"type": "config", **_current_config})
@@ -110,22 +107,26 @@ def _start_ws_thread():
 #  Main Detection Loop
 # ─────────────────────────────────────────────
 
-def run_system(callback=None, source="webcam", headless=False, stop_event: threading.Event | None = None):
+def run_system(callback=None, source="screen", headless=False,
+               stop_event=None, ws_broadcast=None):
+    # ws_broadcast: callable provided by app.py when running as desktop app.
+    # When None we start our own WS server (standalone / CLI mode).
 
-    # ── WebSocket ─────────────────────────────
-    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
-    ws_thread.start()
-    time.sleep(0.5)
+    # ── WebSocket ─────────────────────────────────────────
+    if ws_broadcast is None:
+        ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
+        ws_thread.start()
+        time.sleep(0.5)
+        broadcast = _broadcast_sync
+    else:
+        broadcast = ws_broadcast
 
     # ── Audio capture + transcription ─────────
     audio_ok = _audio.start()
     if audio_ok:
-        _transcription.start(_audio.get_queue())
+        _stt.start(_audio.get_queue())
     else:
         print("[SOVA] ⚠️  Audio capture unavailable — sentiment will be expression-only.")
-
-    # Apply saved TTS settings
-    _tts.set_volume(float(_current_config.get("tts_volume", 0.25)))
 
     # ── Video source ──────────────────────────
     if source == "screen":
@@ -185,7 +186,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
         # 4. Drain transcript queue each frame
         if audio_ok:
-            accumulated_transcripts.extend(_transcription.drain())
+            accumulated_transcripts.extend(_stt.drain())
 
         # 5. Flush every N seconds
         # Pass None when there's nothing — processor treats it as no speech signal
@@ -199,7 +200,8 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
             # Only clear after a successful flush
             accumulated_transcripts.clear()
 
-            _broadcast_sync({
+            # send both description (legacy) and summary for dashboards/popup
+            broadcast({
                 "type":          "result",
                 "expression":    expr,
                 "gesture":       gest,
@@ -207,6 +209,8 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
                 "sentiment":     sentiment,
                 "sentimentConf": sent_conf,
                 "description":   description,
+                # dashboard.js and popup.js expect a "summary" key
+                "summary":       description,
             })
 
             if callback:
@@ -236,7 +240,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
     # ── Cleanup ───────────────────────────────
     _audio.stop()
-    _transcription.stop()
+    _stt.stop()
     cv2.destroyAllWindows()
 
 

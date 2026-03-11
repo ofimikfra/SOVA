@@ -223,7 +223,7 @@ def _template_fallback(expression: str, gesture: str,
 def summarize(expression: str, gesture: str, action: str,
               nlp_label: str | None, nlp_conf: float | None,
               overall_conf: float) -> str:
-    prompt = _build_prompt(expression, gesture, "",#action,
+    prompt = _build_prompt(expression, gesture, action,
                            nlp_label, nlp_conf, overall_conf)
     result = _call_ollama(prompt)
 
@@ -246,7 +246,7 @@ def summarize(expression: str, gesture: str, action: str,
         else:
             sentiment = "neutral"
 
-    result = _template_fallback(expression, gesture, "", #action, 
+    result = _template_fallback(expression, gesture, #action, 
                                 sentiment, overall_conf)
     print(f"[DESCRIPTION] Template ({_confidence_tier(overall_conf)}): {result}")
     return result

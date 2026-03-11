@@ -1,6 +1,6 @@
 {
   "ollama_model": "llama3.2:3b",
-  "flush_interval": 15,
+  "flush_interval": 10,
   "tts_enabled": true,
   "tts_mode": "auto",
   "type": "settings",

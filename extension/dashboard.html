@@ -10,6 +10,9 @@
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
 
+  <!-- Screen reader live region — announces new descriptions automatically -->
+  <div id="sr-live" aria-live="polite" aria-atomic="true" role="status"></div>
+
   <div class="page" id="main">
 
     <!-- Header -->
@@ -22,8 +25,7 @@
       <div style="display:flex; align-items:center; gap:10px;">
         <!-- Start / Stop button — only shown when running as desktop app -->
         <button id="start-btn"
-                aria-label="Start SOVA engine"
-                style="display:none">
+                aria-label="Start SOVA engine">
           Start
         </button>
       
