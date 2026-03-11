@@ -95,7 +95,7 @@ header {
     transition: border-color 0.3s, background 0.3s;
 }
 #status-pill[data-status="connected"] {
-    border-color: var(--accentblue);
+    border-color: var(--positive);
     background: rgba(0, 200, 83, 0.08);
 }
 #status-pill[data-status="disconnected"] {
@@ -109,7 +109,7 @@ header {
     transition: background 0.3s;
     flex-shrink: 0;
 }
-[data-status="connected"]    .status-dot { background: var(--accentblue); }
+[data-status="connected"]    .status-dot { background: var(--positive); }
 [data-status="disconnected"] .status-dot { background: var(--warn); }
 
 /* ── Cards ── */
