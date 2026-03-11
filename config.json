@@ -3,5 +3,5 @@
   "flush_interval": 30,
   "tts_enabled": true,
   "type": "settings",
-  "tts_volume": 0.25
+  "tts_volume": 0.5
 }

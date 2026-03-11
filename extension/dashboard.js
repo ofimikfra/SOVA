@@ -389,27 +389,27 @@ function saveSettings() {
   if (isExtension) {
     chrome.runtime.sendMessage(settings, (resp) => {
       const msg = chrome.runtime.lastError || !resp?.ok
-        ? "✓ Saved — will apply when SOVA connects"
-        : "✓ Saved and applied";
+        ? "✓ Settings saved — will apply when SOVA connects"
+        : "✓ Settings saved and applied";
       showSaveStatus(msg);
       _narrate(msg.replace("✓ ", ""));
     });
 
   } else if (typeof window.pywebview !== "undefined") {
     window.pywebview.api.save_config(settings).then((resp) => {
-      const msg = resp?.ok ? "✓ Saved and applied" : "✓ Saved locally";
+      const msg = resp?.ok ? "✓ Settings saved and applied" : "✓ Saved locally";
       showSaveStatus(msg);
       _narrate(msg.replace("✓ ", ""));
     });
 
   } else if (socket?.readyState === WebSocket.OPEN) {
     socket.send(JSON.stringify(settings));
-    showSaveStatus("✓ Saved and applied");
-    _narrate("Saved and applied.");
+    showSaveStatus("✓ Settings saved and applied");
+    _narrate("Settings saved and applied.");
 
   } else {
-    showSaveStatus("✓ Saved — will apply when SOVA connects");
-    _narrate("Saved. Will apply when SOVA connects.");
+    showSaveStatus("✓ Settings saved — will apply when SOVA connects");
+    _narrate("Settings saved. Will apply when SOVA connects.");
   }
 }
 
