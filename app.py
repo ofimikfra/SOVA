@@ -1,9 +1,5 @@
 """
 app.py — SOVA Desktop App (debug build)
-
-Run this and check the console — each WS client now logs:
-  [APP WS] Client 1: path=/  origin=...  host=...
-so you can see exactly who is connecting.
 """
 import webview
 import threading
@@ -66,10 +62,8 @@ def ws_broadcast_sync(payload: dict):
 # ── WS server ─────────────────────────────────────────────────────────────────
 
 async def _ws_handler(websocket):
-    # ── IDENTITY LOGGING — tells you exactly who each client is ──
     req = getattr(websocket, 'request', None) or getattr(websocket, 'request_headers', None)
     if req is not None:
-        # websockets v10-v11: websocket.request is an http.Request
         hdrs = getattr(req, 'headers', req)
         origin = hdrs.get('Origin', hdrs.get('origin', 'unknown'))
         host   = hdrs.get('Host',   hdrs.get('host',   'unknown'))
@@ -91,7 +85,6 @@ async def _ws_handler(websocket):
                 msg = json.loads(raw)
                 t   = msg.get("type")
 
-                # Also log what each client sends — reveals identity
                 print(f"[APP WS]   msg from {websocket.remote_address}: type={t}")
 
                 if t == "identify":
@@ -99,28 +92,25 @@ async def _ws_handler(websocket):
 
                 elif t == "start_engine":
                     result = _sova_api.start() if _sova_api else {"ok": False}
-                    payload = {"type": "engine_status", "running": result.get("ok", False)}
-                    await _ws_broadcast(payload)
-                    _push_to_webview(payload)
+                    if not result.get("ok", False):
+                        # Only broadcast failure — success is broadcast by main.py
+                        # once the loop is actually running
+                        payload = {"type": "engine_status", "running": False}
+                        await _ws_broadcast(payload)
+                        _push_to_webview(payload)
 
                 elif t == "stop_engine":
                     if _sova_api: _sova_api.stop()
-                    payload = {"type": "engine_status", "running": False}
-                    await _ws_broadcast(payload)
-                    _push_to_webview(payload)
+                    # engine_status: false is broadcast by the thread's finally block
+                    # — don't broadcast here to avoid duplicates
 
                 elif t == "get_config":
                     from src import config as _cfg
                     await websocket.send(json.dumps({"type": "config", **_cfg.load()}))
 
                 elif t == "settings":
-                    from src import config as _cfg
-                    import src.processor as _proc
-                    import src.tts_engine as _tts
-                    _cfg.update(msg)
-                    if "flush_interval" in msg: _proc.set_interval(float(msg["flush_interval"]))
-                    if "tts_enabled"    in msg: _tts.set_enabled(msg["tts_enabled"])
-                    cfg = {"type": "config", **_cfg.load()}
+                    _apply_settings_from_msg(msg)
+                    cfg = {"type": "config", **_cfg_load()}
                     await _ws_broadcast(cfg)
                     _push_to_webview(cfg)
 
@@ -133,6 +123,23 @@ async def _ws_handler(websocket):
     finally:
         _ws_clients.discard(websocket)
         print(f"[APP WS] Client disconnected: {websocket.remote_address} — {len(_ws_clients)} remaining")
+
+
+def _cfg_load():
+    from src import config as _cfg
+    return _cfg.load()
+
+
+def _apply_settings_from_msg(msg: dict):
+    """Apply a settings dict: write to config.json and hot-reload running modules."""
+    from src import config as _cfg
+    import src.processor as _proc
+    import src.tts_engine as _tts
+
+    _cfg.update(msg)
+    if "flush_interval" in msg: _proc.set_interval(float(msg["flush_interval"]))
+    if "tts_enabled"    in msg: _tts.set_enabled(msg["tts_enabled"])
+    if "tts_volume"     in msg: _tts.set_volume(float(msg["tts_volume"]))
 
 
 async def _ws_serve():
@@ -163,6 +170,15 @@ class SovaApi:
     def get_status(self) -> dict:
         return {"running": self._running}
 
+    def save_config(self, settings: dict) -> dict:
+        """
+        Called directly by dashboard.js via pywebview when SOVA is not running.
+        Writes to config.json and hot-reloads any running modules immediately.
+        """
+        _apply_settings_from_msg(settings)
+        print(f"[APP] Config saved via pywebview: {settings}")
+        return {"ok": True}
+
     def start(self) -> dict:
         if self._running:
             return {"ok": False, "reason": "Already running"}
@@ -183,6 +199,8 @@ class SovaApi:
                 traceback.print_exc()
             finally:
                 self._running = False
+                # Single authoritative engine_status: false — emitted here only,
+                # not in stop() — so the dashboard never hears it more than once
                 ws_broadcast_sync({"type": "engine_status", "running": False})
                 print("[APP] SOVA engine stopped.")
 
@@ -194,7 +212,7 @@ class SovaApi:
     def stop(self) -> dict:
         if self._stop_event: self._stop_event.set()
         self._running = False
-        ws_broadcast_sync({"type": "engine_status", "running": False})
+        # Don't broadcast here — the thread's finally block handles it once cleanly
         print("[APP] SOVA engine stopping...")
         return {"ok": True}
 
@@ -209,6 +227,12 @@ def main():
 
     ws_thread = threading.Thread(target=_start_ws_thread, daemon=True, name="ws-server")
     ws_thread.start()
+
+    def _preload():
+        from src import config       # noqa
+        import src.processor         # noqa  triggers: nlp_engine → from transformers import pipeline
+        import src.tts_engine        # noqa
+    threading.Thread(target=_preload, daemon=True, name="preload").start()
 
     _webview_window = webview.create_window(
         title            = "SOVA",

@@ -112,6 +112,17 @@ def run_system(callback=None, source="screen", headless=False,
     # ws_broadcast: callable provided by app.py when running as desktop app.
     # When None we start our own WS server (standalone / CLI mode).
 
+    # ── Load config fresh at engine start ─────
+    # This ensures any settings saved while the engine was stopped
+    # (via pywebview api or WS) are picked up before the loop runs.
+    cfg = _config.load()
+    _processor.set_interval(float(cfg.get("flush_interval", 30)))
+    _tts.set_enabled(cfg.get("tts_enabled", True))
+    _tts.set_volume(cfg.get("tts_volume", 0.25))
+    print(f"[SOVA] Loaded config: interval={cfg.get('flush_interval')}s  "
+          f"tts={'on' if cfg.get('tts_enabled') else 'off'}  "
+          f"model={cfg.get('ollama_model')}")
+
     # ── WebSocket ─────────────────────────────────────────
     if ws_broadcast is None:
         ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
@@ -145,10 +156,12 @@ def run_system(callback=None, source="screen", headless=False,
     sent_conf    = 1.0
     description  = ""
 
-    # Accumulate transcripts across frames — only cleared on a successful flush
     accumulated_transcripts: list[str] = []
 
     print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
+
+    # Broadcast NOW — models loaded, loop starting, truly ready
+    broadcast({"type": "engine_status", "running": True})
 
     while not (stop_event and stop_event.is_set()):
         frame = get_frame()
@@ -189,7 +202,6 @@ def run_system(callback=None, source="screen", headless=False,
             accumulated_transcripts.extend(_stt.drain())
 
         # 5. Flush every N seconds
-        # Pass None when there's nothing — processor treats it as no speech signal
         captions_for_flush = accumulated_transcripts if accumulated_transcripts else None
         stable_results = flushAll(captions=captions_for_flush)
 
@@ -197,10 +209,8 @@ def run_system(callback=None, source="screen", headless=False,
             expr, gest, act, sentiment, sent_conf, description = stable_results
             display_expr, display_gest, display_act = expr, gest, act
 
-            # Only clear after a successful flush
             accumulated_transcripts.clear()
 
-            # send both description (legacy) and summary for dashboards/popup
             broadcast({
                 "type":          "result",
                 "expression":    expr,
@@ -209,7 +219,6 @@ def run_system(callback=None, source="screen", headless=False,
                 "sentiment":     sentiment,
                 "sentimentConf": sent_conf,
                 "description":   description,
-                # dashboard.js and popup.js expect a "summary" key
                 "summary":       description,
             })
 
