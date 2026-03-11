@@ -33,6 +33,8 @@ const startBtn     = document.getElementById("start-btn");
 const ttsToggle    = document.getElementById("tts-toggle");
 const flushSlider  = document.getElementById("flush-interval");
 const intervalDisp = document.getElementById("interval-display");
+const volumeSlider = document.getElementById("tts-volume");
+const volumeDisp   = document.getElementById("tts-volume-display");
 const modelSelect  = document.getElementById("ollama-model");
 const saveBtn      = document.getElementById("save-btn");
 const saveStatus   = document.getElementById("save-status");
@@ -119,6 +121,11 @@ function applyConfig(cfg) {
     intervalDisp.textContent       = cfg.flush_interval + "s";
     flushSlider.setAttribute("aria-valuenow", cfg.flush_interval);
   }
+  if (cfg.tts_volume !== undefined) {
+    volumeSlider.value              = cfg.tts_volume;
+    volumeDisp.textContent       = Math.round(cfg.tts_volume * 100)  + "%";
+    volumeSlider.setAttribute("aria-valuenow", cfg.tts_volume);
+  }
   if (cfg.ollama_model   !== undefined) modelSelect.value     = cfg.ollama_model;
 }
 
@@ -131,9 +138,25 @@ function loadLocalSettings() {
 
 flushSlider.addEventListener("input", () => {
   intervalDisp.textContent = flushSlider.value + "s";
-  flushSlider.setAttribute("aria-valuenow", flushSlider.value);
+  flushSlider.setAttribute("aria-valuenow", flushSlider.value * 100);
 });
 
+// Volume slider — send immediately and play a test sound
+volumeSlider.addEventListener("input", () => {
+  const val = parseFloat(volumeSlider.value);
+  volumeDisp.textContent = Math.round(val * 100) + "%";
+  volumeSlider.setAttribute("aria-valuenow", val);
+  sendVolume(val);
+});
+
+function sendVolume(val) {
+  const msg = { type: "settings", tts_volume: val };
+  if (isExtension) {
+    chrome.runtime.sendMessage(msg);
+  } else if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(msg));
+  }
+}
 
 // ── Settings save ─────────────────────────────
 
@@ -141,6 +164,7 @@ saveBtn.addEventListener("click", () => {
   const settings = {
     type:           "settings",
     tts_enabled:    ttsToggle.checked,
+    tts_volume:     parseFloat(ttsVolumeSlider.value),
     flush_interval: parseInt(flushSlider.value, 10),
     ollama_model:   modelSelect.value,
   };

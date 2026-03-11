@@ -1,7 +1,6 @@
 const WS_URL = "ws://localhost:8765";
 let socket = null;
 
-const dot        = document.getElementById("dot");
 const status     = document.getElementById("status");
 const latest     = document.getElementById("latest");
 const openDash   = document.getElementById("open-dash");
@@ -68,7 +67,6 @@ function connect() {
 }
 
 function setConnected(connected) {
-  dot.classList.toggle("connected", connected);
   status.textContent = connected ? "Connected" : "Not connected";
   status.classList.toggle("connected", connected);
 }
