@@ -420,24 +420,5 @@ def stop():
             _stop_screencapturekit()
 
 
-def get_rms() -> float:
-    """Current audio RMS level. >0.02 typically means someone is speaking."""
-    return _current_rms
-
-
 def get_queue() -> queue.Queue:
     return _audio_queue
-
-
-def list_devices():
-    try:
-        import sounddevice as sd
-        print("\n-- Audio Devices ----------------------------")
-        for i, dev in enumerate(sd.query_devices()):
-            tags = ""
-            if dev["max_input_channels"]  > 0: tags += " [in]"
-            if dev["max_output_channels"] > 0: tags += " [out]"
-            print(f"  {i:>2}: {dev['name']}{tags}")
-        print("---------------------------------------------\n")
-    except ImportError:
-        print("[AUDIO] sounddevice not installed.")
