@@ -167,6 +167,7 @@ function updateOverlay({ status, expression, gesture, action, sentiment, descrip
 }
 
 function handleResult(msg) {
+  overlayEl.style.direction = msg.rtl ? "rtl" : "ltr";
   if (msg.dashboardVisible === false) {
     overlayEl.style.opacity = "0";
     return;

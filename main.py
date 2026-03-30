@@ -19,6 +19,7 @@ import src.stt_engine as _stt
 from src import config as _config
 import src.processor as _processor
 import src.tts_engine as _tts
+from src.translator import translate, is_rtl
 
 _current_config = _config.load()
 
@@ -211,6 +212,9 @@ def run_system(callback=None, source="screen", headless=False,
 
             accumulated_transcripts.clear()
 
+            lang        = _config.load().get("language", "en")
+            description = translate(description, lang)
+
             broadcast({
                 "type":          "result",
                 "expression":    expr,
@@ -220,12 +224,14 @@ def run_system(callback=None, source="screen", headless=False,
                 "sentimentConf": sent_conf,
                 "description":   description,
                 "summary":       description,
+                "language":      lang,          
+                "rtl":           is_rtl(lang), 
             })
 
             if callback:
                 callback(expr, gest, act, description)
 
-            threading.Thread(target=speak, args=(description,), daemon=True).start()
+            threading.Thread(target=speak, args=(description, lang), daemon=True).start()
 
         # 6. Visual overlay
         audio_label = "audio ✓" if audio_ok else "audio ✗"

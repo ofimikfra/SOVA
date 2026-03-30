@@ -3,8 +3,8 @@ src/tts_engine.py
 
 Auto-speaks every description at the configured volume.
 
-macOS:  say -o tmpfile → afplay -v {vol} tmpfile
-Win/Linux: pyttsx3 with setProperty('volume', vol)
+macOS:  say -v {voice} -o tmpfile → afplay -v {vol} tmpfile
+Win/Linux: pyttsx3 with setProperty('volume', vol) + voice matching by locale
 """
 
 import os
@@ -14,6 +14,8 @@ import tempfile
 import threading
 import subprocess
 import atexit
+
+from src.translator import get_tts_lang, get_macos_voice
 
 # ── State ──────────────────────────────────────────────────────────────────────
 
@@ -49,30 +51,60 @@ def _play_chime():
 
 # ── Playback ───────────────────────────────────────────────────────────────────
 
-def _play(text: str):
-    """Speak text at current volume. Sets _tts_active for the duration."""
+def _play(text: str, tts_lang: str = "en-US"):
+    """Speak text at current volume using the correct voice for tts_lang."""
     global _tts_active
     if not text:
         return
     _tts_active = True
     try:
         vol = round(_tts_volume, 2)
+
         if sys.platform == "darwin":
+            # macOS `say` takes a voice name, not a locale code.
+            # get_macos_voice() maps e.g. "ar-SA" → "Laila".
+            # The voice must be downloaded in System Settings > Accessibility
+            # > Spoken Content for non-English languages.
+            voice = get_macos_voice(tts_lang.split("-")[0]
+                                    if "-" in tts_lang else tts_lang)
             with tempfile.NamedTemporaryFile(suffix=".aiff", delete=False) as f:
                 tmp = f.name
-            subprocess.run(["say", "-o", tmp, text],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(["afplay", "-v", str(vol), tmp],
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                ["say", "-v", voice, "-o", tmp, text],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            subprocess.run(
+                ["afplay", "-v", str(vol), tmp],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             os.unlink(tmp)
+
         else:
+            # Windows / Linux — pyttsx3.
+            # Pick the first installed voice whose id contains the language
+            # prefix (e.g. "ar", "fr", "es"). Falls back to the system default
+            # if no matching voice is installed.
             import pyttsx3
             engine = pyttsx3.init()
             engine.setProperty("rate",   170)
             engine.setProperty("volume", vol)
+
+            lang_prefix = tts_lang.split("-")[0].lower()   # "ar-SA" → "ar"
+            voices      = engine.getProperty("voices")
+            match       = next(
+                (v for v in voices if lang_prefix in v.id.lower()), None
+            )
+            if match:
+                engine.setProperty("voice", match.id)
+            else:
+                print(f"[TTS] No installed voice found for '{tts_lang}' — using system default.")
+
             engine.say(text)
             engine.runAndWait()
             engine.stop()
+
     except Exception as e:
         print(f"[TTS] Playback error: {e}")
     finally:
@@ -100,12 +132,13 @@ def _play_test_tone():
 
 def _worker():
     while True:
-        text = _queue.get()
-        if text is None:
+        item = _queue.get()
+        if item is None:
             _queue.task_done()
             break
+        text, tts_lang = item          # unpacked tuple put by speak()
         if _tts_enabled and text:
-            _play(text)
+            _play(text, tts_lang)
         _queue.task_done()
 
 
@@ -144,8 +177,9 @@ def set_volume(volume: float, play_test: bool = False):
         threading.Thread(target=_play_test_tone, daemon=True).start()
 
 
-def speak(text: str):
+def speak(text: str, locale: str = "en"):
     """Non-blocking. Always replaces stale queued items."""
+    tts_lang = get_tts_lang(locale)
     if not _tts_enabled or not text:
         return
     threading.Thread(target=_play_chime, daemon=True).start()
@@ -155,4 +189,4 @@ def speak(text: str):
             _queue.task_done()
         except queue.Empty:
             break
-    _queue.put(text)
+    _queue.put((text, tts_lang))      # tuple: worker unpacks both fields

@@ -14,44 +14,95 @@
   <!-- Polite live region — descriptions, settings confirmations -->
   <div id="sr-live-polite" aria-live="polite" aria-atomic="true" role="status"></div>
 
-  <!-- ── Keyboard Help Modal ──────────────────────────────────── -->
+  <!-- ── Help Modal ──────────────────────────────────── -->
   <div id="help-modal" role="dialog" aria-modal="true"
        aria-labelledby="help-modal-title" aria-describedby="help-modal-desc" hidden>
     <div class="modal-backdrop" id="modal-backdrop"></div>
     <div class="modal-box" tabindex="-1">
+
       <div class="modal-header">
-        <h2 id="help-modal-title">Keyboard Shortcuts</h2>
+        <h2 id="help-modal-title">Help &amp; Shortcuts</h2>
         <button id="help-close-btn" class="modal-close"
-                aria-label="Close keyboard shortcuts panel">✕</button>
+                aria-label="Close help panel">✕</button>
       </div>
-      <p id="help-modal-desc" class="modal-subtitle">
-        Press <kbd>H</kbd> at any time to hear these shortcuts read aloud again.
-      </p>
-      <div class="shortcut-grid">
-        <div class="shortcut-section">
-          <h3 class="shortcut-section-title">Navigation</h3>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>D</kbd></span><span>Jump to latest description</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>F</kbd></span><span>Jump to description feed</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>G</kbd></span><span>Jump to settings</span></div>
+
+      <!-- ── Usage Guide ── -->
+      <div class="guide-section">
+        <h3 class="shortcut-section-title">How to use SOVA</h3>
+
+        <div class="guide-step">
+          <div class="guide-step-number" aria-hidden="true">1</div>
+          <div class="guide-step-body">
+            <strong>Join a Google Meet call</strong>
+          </div>
         </div>
-        <div class="shortcut-section">
-          <h3 class="shortcut-section-title">Controls</h3>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>Space</kbd></span><span>Start / Stop SOVA</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>T</kbd></span><span>Toggle text-to-speech on / off</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>+</kbd> / <kbd>−</kbd></span><span>Raise / lower TTS volume by 5%</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>R</kbd></span><span>Re-read latest description aloud</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></span><span>Save settings</span></div>
+
+        <div class="guide-step">
+          <div class="guide-step-number" aria-hidden="true">2</div>
+          <div class="guide-step-body">
+            <strong>Start SOVA</strong>
+            <span>Click <em>Start SOVA</em> or press <kbd>Space</kbd>.</span>
+          </div>
         </div>
-        <div class="shortcut-section">
-          <h3 class="shortcut-section-title">Help</h3>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>H</kbd></span><span>Read shortcuts aloud &amp; show this panel</span></div>
-          <div class="shortcut-row"><span class="shortcut-keys"><kbd>Esc</kbd></span><span>Close this panel</span></div>
+
+        <div class="guide-step">
+          <div class="guide-step-number" aria-hidden="true">3</div>
+          <div class="guide-step-body">
+            <strong>Listen to descriptions</strong>
+            <span>Descriptions appear after your specified analysis interval. The latest one appears under <em>Latest Description</em>. All previous ones are under <em>Description Feed</em> below it, colour-coded by sentiment.</span>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-number" aria-hidden="true">4</div>
+          <div class="guide-step-body">
+            <strong>Adjust settings</strong>
+            <span>Go to <em>Settings</em> to change the analysis interval, TTS voice and volume, language, and the local AI model. Hit <em>Save Settings</em> or press <kbd>Ctrl</kbd>+<kbd>S</kbd> to apply.</span>
+          </div>
+        </div>
+
+        <div class="guide-step">
+          <div class="guide-step-number" aria-hidden="true">5</div>
+          <div class="guide-step-body">
+            <strong>Stop SOVA</strong>
+            <span>Click <em>Stop SOVA</em> or press <kbd>Space</kbd> again.</span>
+          </div>
         </div>
       </div>
+
+      <!-- ── Keyboard Shortcuts ── -->
+      <div class="guide-section">
+        <h3 class="shortcut-section-title" style="margin-bottom:6px;">Keyboard Shortcuts</h3>
+        <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:14px;">
+          Press <kbd>H</kbd> at any time to hear these shortcuts read aloud again.
+        </p>
+        <div class="shortcut-grid">
+          <div class="shortcut-section">
+            <h4 class="shortcut-section-title">Navigation</h4>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>D</kbd></span><span>Jump to latest description</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>F</kbd></span><span>Jump to description feed</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>G</kbd></span><span>Jump to settings</span></div>
+          </div>
+          <div class="shortcut-section">
+            <h4 class="shortcut-section-title">Controls</h4>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>Space</kbd></span><span>Start / Stop SOVA</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>+</kbd> / <kbd>−</kbd></span><span>Raise / lower TTS volume by 5%</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>R</kbd></span><span>Re-read latest description aloud</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>Ctrl</kbd>+<kbd>S</kbd></span><span>Save settings</span></div>
+          </div>
+          <div class="shortcut-section">
+            <h4 class="shortcut-section-title">Help</h4>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>H</kbd></span><span>Read shortcuts aloud &amp; show this panel</span></div>
+            <div class="shortcut-row"><span class="shortcut-keys"><kbd>Esc</kbd></span><span>Close this panel</span></div>
+          </div>
+        </div>
+      </div>
+
       <p class="modal-tip">
         💡 Use <kbd>Tab</kbd> and <kbd>Shift+Tab</kbd> to move between controls.
         Sliders respond to <kbd>↑</kbd> <kbd>↓</kbd> arrow keys.
       </p>
+
     </div>
   </div>
 
@@ -78,8 +129,8 @@
         <button id="start-btn" aria-label="Start SOVA engine — press Space" style="display:none" tabindex="0">
           Start SOVA
         </button>
-        <div id="status-pill" role="status" aria-live="polite"
-             aria-label="Connection status: disconnected" data-status="disconnected">
+        <div id="status-pill" role="status"
+            aria-label="Connection status: disconnected" data-status="disconnected">
           <div class="status-dot" aria-hidden="true"></div>
           <span id="status-text">Not connected</span>
         </div>
@@ -132,7 +183,7 @@
 
         <div class="setting-row">
           <div class="setting-label" id="lbl-tts-volume">
-            <strong>TTS Volume</strong>
+            <strong>Feedback Volume</strong>
             <span>Use + / − keys</span>
           </div>
           <div class="range-row">
@@ -148,7 +199,7 @@
 
         <div class="setting-row">
           <div class="setting-label" id="lbl-flush-interval">
-            <strong>Analysis Interval</strong>
+            <strong>Feedback Interval</strong>
             <span>How often SOVA analyses, in seconds</span>
           </div>
           <div class="range-row">
@@ -159,6 +210,19 @@
             <span class="range-value" id="interval-display"
                   aria-live="polite" aria-atomic="true">30s</span>
           </div>
+        </div>
+
+        <div class="setting-row">
+          <div class="setting-label" id="lbl-language">
+            <strong>Language</strong>
+            <span>Translate descriptions into this language</span>
+          </div>
+          <select id="language-select" aria-labelledby="lbl-language">
+            <option value="en">English</option>
+            <option value="ar">Arabic</option>
+            <option value="fr">French</option>
+            <option value="es">Spanish</option>
+          </select>
         </div>
 
         <div class="setting-row">

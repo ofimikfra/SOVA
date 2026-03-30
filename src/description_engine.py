@@ -246,7 +246,7 @@ def summarize(expression: str, gesture: str, action: str,
         else:
             sentiment = "neutral"
 
-    result = _template_fallback(expression, gesture, #action, 
+    result = _template_fallback(expression, gesture, action, 
                                 sentiment, overall_conf)
     print(f"[DESCRIPTION] Template ({_confidence_tier(overall_conf)}): {result}")
     return result

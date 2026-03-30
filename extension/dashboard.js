@@ -37,6 +37,7 @@ const helpModal     = document.getElementById("help-modal");
 const helpCloseBtn  = document.getElementById("help-close-btn");
 const modalBackdrop = document.getElementById("modal-backdrop");
 const srLivePolite  = document.getElementById("sr-live-polite");
+const languageSelect = document.getElementById("language-select");
 
 
 // ── Narrator (Web Speech API) ─────────────────
@@ -47,7 +48,7 @@ function _narrate(text, { interrupt = true } = {}) {
   if (!_synth) return;
   if (interrupt) _synth.cancel();
   const utt = new SpeechSynthesisUtterance(text);
-  utt.rate   = 0.95;
+  utt.rate   = 0.85;
   utt.pitch  = 1.0;
   utt.volume = 1.0;
   _synth.speak(utt);
@@ -59,49 +60,62 @@ function _runWelcomeTour() {
 
   const lines = [
     "Welcome to SOVA.",
-    "Press Space to start or stop SOVA.",
-    "Press D to jump to the latest description.",
-    "Press F to browse the description feed.",
-    "Press G to open settings.",
-    "Press T to toggle text-to-speech on or off.",
-    "Press plus or minus to raise or lower the volume.",
-    "Press R to re-read the latest description.",
-    "Press H at any time to hear these shortcuts again.",
-    "Press Tab and Shift Tab to move between controls.",
-    "SOVA is ready.",
+    "Press H to open the help menu."
   ];
 
   lines.forEach(line => {
     const utt = new SpeechSynthesisUtterance(line);
-    utt.rate   = 0.95;
+    utt.rate   = 0.85;
     utt.pitch  = 1.0;
     utt.volume = 1.0;
     _synth.speak(utt);
   });
 }
 
+function _readModal() {
+  _narrate(
+    "The help menu is open. " +
+    "Press K to hear keyboard shortcuts. " +
+    "Press T to hear the usage tutorial. " +
+    "Press Escape to close. "
+  );
+}
+
 function _readShortcuts() {
   _narrate(
-    "Keyboard shortcuts. " +
-    "Space: start or stop SOVA. " +
-    "D: latest description. " +
-    "F: description feed. " +
-    "G: settings. " +
-    "T: toggle text-to-speech. " +
-    "Plus or minus: volume up or down. " +
-    "R: re-read last description. " +
-    "H: repeat shortcuts. " +
-    "Escape: close this panel."
+    "SOVA Keyboard shortcuts. " +
+    "Press Space to start or stop SOVA. " +
+    "Press D to go to the latest description. " +
+    "Press F to go to the description feed. " +
+    "Press G to go to settings. " +
+    "Press plus or minus to turn the volume up or down. " +
+    "Press R to re-read the last description. " +
+    "Press H to open the help menu. " +
+    "Use tab and shift+tab to navigate the dashboard. " +
+    "Use the up and down arrows to adjust sliders when focused on them. " +
+    "Press Escape to close."
+  );
+}
+
+function _readTutorial() {
+  _narrate(
+    "How to use SOVA. " +
+    "First, join a Google Meet call. " +
+    "Second, Start SOVA by clicking the Start SOVA button or pressing space. " +
+    "Third, Listen to descriptions. Descriptions appear after your specified feedback interval. The latest one appears under Latest Description. All previous ones are under Description Feed below it, colour-coded by sentiment. " +
+    "Go to settings to change the feedback interval, TTS, feedback volume, language, and the local AI model. Hit Save settings or press control+S to apply. " +
+    "Stop sova by clicking Stop SOVA or pressing space again. " +
+    "Press Escape to close. "
   );
 }
 
 
 // ── Help modal ────────────────────────────────
 
-function openHelpModal() {
+function openHelpModal(narrate=false) {
   helpModal.hidden = false;
   helpModal.querySelector(".modal-box").focus();
-  _readShortcuts();
+  if (narrate) _readModal();
 }
 
 function closeHelpModal() {
@@ -110,12 +124,25 @@ function closeHelpModal() {
   _synth.cancel();
 }
 
-helpBtn.addEventListener("click", openHelpModal);
+helpBtn.addEventListener("click", openHelpModal.bind(null, false));
 helpCloseBtn.addEventListener("click", closeHelpModal);
 modalBackdrop.addEventListener("click", closeHelpModal);
 
 helpModal.addEventListener("keydown", (e) => {
   if (e.key === "Escape") { closeHelpModal(); return; }
+
+  if (e.key === "k" || e.key === "K") {
+    e.preventDefault();
+    _readShortcuts();
+    return;
+  }
+
+  if (e.key === "t" || e.key === "T") {
+    e.preventDefault();
+    _readTutorial();
+    return;
+  }
+
   if (e.key !== "Tab") return;
   const focusable = [...helpModal.querySelectorAll(
     'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
@@ -128,7 +155,6 @@ helpModal.addEventListener("keydown", (e) => {
     e.preventDefault(); first.focus();
   }
 });
-
 
 // ── Global keyboard shortcuts ─────────────────
 
@@ -173,16 +199,11 @@ document.addEventListener("keydown", (e) => {
       _narrate("Settings.");
       break;
 
-    case "t": case "T":
-      ttsToggle.click();
-      _narrate("Text-to-speech " + (ttsToggle.checked ? "on." : "off."));
-      break;
-
     case "+": case "=": {
       const newVol = Math.min(1, parseFloat(volumeSlider.value) + 0.05);
       volumeSlider.value = newVol;
       volumeSlider.dispatchEvent(new Event("input"));
-      _narrate(`Volume ${Math.round(newVol * 100)} percent.`);
+      _narrate(`${Math.round(newVol * 100)} percent.`);
       break;
     }
 
@@ -190,7 +211,7 @@ document.addEventListener("keydown", (e) => {
       const newVol = Math.max(0, parseFloat(volumeSlider.value) - 0.05);
       volumeSlider.value = newVol;
       volumeSlider.dispatchEvent(new Event("input"));
-      _narrate(`Volume ${Math.round(newVol * 100)} percent.`);
+      _narrate(`${Math.round(newVol * 100)} percent.`);
       break;
     }
 
@@ -199,7 +220,7 @@ document.addEventListener("keydown", (e) => {
       break;
 
     case "h": case "H":
-      openHelpModal();
+      openHelpModal(narrate=true);
       break;
 
     case "Escape":
@@ -270,7 +291,6 @@ function setEngineState(running) {
   }
 
   setStatus(running ? "connected" : "disconnected");
-  srLive.textContent = running ? "SOVA is connected." : "SOVA is disconnected.";
   _narrate(running ? "SOVA is connected." : "SOVA is disconnected.");
 }
 
@@ -281,6 +301,12 @@ function handleResult(msg) {
   const summary   = msg.summary ?? msg.description ?? "No description available.";
   const conf      = msg.sentimentConf ?? 0;
   const sentiment = msg.sentiment ?? "neutral";
+  const rtl       = msg.rtl ?? false;
+
+  const dir = rtl ? "rtl" : "ltr";
+  descText.style.direction  = dir;
+  descText.style.textAlign  = rtl ? "right" : "left";
+  feed.style.direction      = dir;
 
   descText.textContent = summary;
   descText.classList.remove("placeholder");
@@ -304,11 +330,13 @@ function confTier(conf) {
 
 // ── Feed ──────────────────────────────────────
 
-function addFeedItem(text, sentiment) {
+function addFeedItem(text, sentiment, rtl = false) {
   const time = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const li = document.createElement("li");
   li.className         = "feed-item";
   li.dataset.sentiment = sentiment ?? "neutral";
+  li.style.direction   = rtl ? "rtl" : "ltr";
+  li.style.textAlign   = rtl ? "right" : "left";
   li.innerHTML = `
     <span class="feed-time" aria-label="Time: ${time}">${time}</span>
     <span class="feed-text">${escapeHtml(text)}</span>
@@ -340,6 +368,7 @@ function applyConfig(cfg) {
     volumeSlider.setAttribute("aria-valuetext", pct + " percent");
   }
   if (cfg.ollama_model !== undefined) modelSelect.value = cfg.ollama_model;
+  if (cfg.language !== undefined) languageSelect.value = cfg.language;
 }
 
 function loadLocalSettings() {
@@ -382,6 +411,7 @@ function saveSettings() {
     tts_volume:     parseFloat(volumeSlider.value),
     flush_interval: parseInt(flushSlider.value, 10),
     ollama_model:   modelSelect.value,
+    language: languageSelect.value
   };
 
   localStorage.setItem("sova_config", JSON.stringify(settings));
@@ -458,7 +488,6 @@ function initDesktopApp() {
   startBtn?.addEventListener("click", async () => {
     if (!engineRunning) {
       setStatus("starting");
-      srLive.textContent = "SOVA is starting up. Please wait.";
       _narrate("SOVA is starting up. Please wait.");
       startBtn.disabled = true;
 
@@ -467,7 +496,6 @@ function initDesktopApp() {
 
       if (!result.ok) {
         setStatus("disconnected");
-        srLive.textContent = "SOVA failed to start.";
         _narrate("SOVA failed to start.");
         _lastEngineRunning = null;
       }
@@ -475,7 +503,6 @@ function initDesktopApp() {
 
     } else {
       setStatus("stopping");
-      srLive.textContent = "SOVA is stopping.";
       _narrate("Stopping SOVA.");
 
       startBtn.disabled = true;

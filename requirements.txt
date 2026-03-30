@@ -13,3 +13,4 @@ webview
 faster-whisper
 sounddevice
 numpy
+deep-translator
