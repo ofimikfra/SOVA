@@ -1,9 +1,9 @@
 import cv2
 
-cap = cv2.VideoCapture(0)  # webcam
+cap = cv2.VideoCapture(0)
 
 def getCameraFrame():
     ret, frame = cap.read()
     if not ret:
-        raise RuntimeError("Could not read frame from webcam")
+        return None  # ← must be return None, not raise
     return frame
