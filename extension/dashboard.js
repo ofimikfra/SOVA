@@ -30,8 +30,10 @@ const feed         = document.getElementById("feed");
 const srLive       = document.getElementById("sr-live");
 const startBtn     = document.getElementById("start-btn");
 
-const ttsToggle    = document.getElementById("tts-toggle");
-const flushSlider  = document.getElementById("flush-interval");
+const ttsToggle      = document.getElementById("tts-toggle");
+const ttsVolumeSlider= document.getElementById("tts-volume");
+const ttsVolumeDisp  = document.getElementById("tts-volume-display");
+const flushSlider    = document.getElementById("flush-interval");
 const intervalDisp = document.getElementById("interval-display");
 const modelSelect  = document.getElementById("ollama-model");
 const saveBtn      = document.getElementById("save-btn");
@@ -50,7 +52,8 @@ function setStatus(s) {
 // ── Result handler ────────────────────────────
 
 function handleResult(msg) {
-  const summary   = msg.summary   ?? "No description available.";
+  // support both new `summary` field and legacy `description` key
+  const summary   = msg.summary ?? msg.description ?? "No description available.";
   const conf      = msg.sentimentConf ?? 0;
   const sentiment = msg.sentiment ?? "neutral";
 
@@ -112,13 +115,18 @@ function escapeHtml(str) {
 // ── Config ────────────────────────────────────
 
 function applyConfig(cfg) {
-  if (cfg.tts_enabled    !== undefined) ttsToggle.checked     = cfg.tts_enabled;
+  if (cfg.tts_enabled  !== undefined) ttsToggle.checked = cfg.tts_enabled;
+  if (cfg.tts_volume   !== undefined) {
+    ttsVolumeSlider.value     = cfg.tts_volume;
+    ttsVolumeDisp.textContent = Math.round(cfg.tts_volume * 100) + "%";
+    ttsVolumeSlider.setAttribute("aria-valuenow", cfg.tts_volume);
+  }
   if (cfg.flush_interval !== undefined) {
     flushSlider.value              = cfg.flush_interval;
     intervalDisp.textContent       = cfg.flush_interval + "s";
     flushSlider.setAttribute("aria-valuenow", cfg.flush_interval);
   }
-  if (cfg.ollama_model   !== undefined) modelSelect.value     = cfg.ollama_model;
+  if (cfg.ollama_model !== undefined) modelSelect.value = cfg.ollama_model;
 }
 
 function loadLocalSettings() {
@@ -133,6 +141,43 @@ flushSlider.addEventListener("input", () => {
   flushSlider.setAttribute("aria-valuenow", flushSlider.value);
 });
 
+// Volume slider — send immediately and play a test sound
+ttsVolumeSlider.addEventListener("input", () => {
+  const val = parseFloat(ttsVolumeSlider.value);
+  ttsVolumeDisp.textContent = Math.round(val * 100) + "%";
+  ttsVolumeSlider.setAttribute("aria-valuenow", val);
+  sendVolume(val);
+});
+
+// Arrow key shortcuts when slider is focused or anywhere on the page
+document.addEventListener("keydown", (e) => {
+  const STEP = 0.05;
+  if (e.key === "ArrowUp" || e.key === "ArrowRight") {
+    e.preventDefault();
+    setVolume(parseFloat(ttsVolumeSlider.value) + STEP);
+  } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
+    e.preventDefault();
+    setVolume(parseFloat(ttsVolumeSlider.value) - STEP);
+  }
+});
+
+function setVolume(val) {
+  val = Math.max(0, Math.min(1, parseFloat(val.toFixed(2))));
+  ttsVolumeSlider.value     = val;
+  ttsVolumeDisp.textContent = Math.round(val * 100) + "%";
+  ttsVolumeSlider.setAttribute("aria-valuenow", val);
+  sendVolume(val);
+}
+
+function sendVolume(val) {
+  const msg = { type: "settings", tts_volume: val };
+  if (isExtension) {
+    chrome.runtime.sendMessage(msg);
+  } else if (socket && socket.readyState === WebSocket.OPEN) {
+    socket.send(JSON.stringify(msg));
+  }
+}
+
 
 // ── Settings save ─────────────────────────────
 
@@ -140,6 +185,7 @@ saveBtn.addEventListener("click", () => {
   const settings = {
     type:           "settings",
     tts_enabled:    ttsToggle.checked,
+    tts_volume:     parseFloat(ttsVolumeSlider.value),
     flush_interval: parseInt(flushSlider.value, 10),
     ollama_model:   modelSelect.value,
   };

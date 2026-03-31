@@ -10,15 +10,12 @@
 <body>
   <a href="#main" class="skip-link">Skip to main content</a>
 
-  <!-- Screen reader live region — announces new descriptions automatically -->
-  <div id="sr-live" aria-live="polite" aria-atomic="true" role="status"></div>
-
   <div class="page" id="main">
 
     <!-- Header -->
     <header>
       <div class="logo" role="banner">
-        <div class="logo-dot" aria-hidden="true"></div>
+        <img src="logo.png" alt="SOVA logo" class="logo-img">
         SOVA
       </div>
     
@@ -84,6 +81,22 @@
           </label>
         </div>
 
+        <!-- TTS volume -->
+        <div class="setting-row">
+          <div class="setting-label">
+            <strong>TTS Volume</strong>
+            <span>Use ↑ ↓ arrow keys to adjust</span>
+          </div>
+          <div class="range-row">
+            <input type="range" id="tts-volume"
+                   min="0" max="1" step="0.05" value="0.25"
+                   aria-label="TTS volume"
+                   aria-valuemin="0" aria-valuemax="1" aria-valuenow="0.25">
+            <span class="range-value" id="tts-volume-display"
+                  aria-live="polite" aria-atomic="true">25%</span>
+          </div>
+        </div>
+
         <!-- Flush interval -->
         <div class="setting-row">
           <div class="setting-label">
@@ -92,11 +105,11 @@
           </div>
           <div class="range-row">
             <input type="range" id="flush-interval"
-                   min="3" max="30" step="1" value="5"
+                   min="3" max="30" step="1" value="30"
                    aria-label="Analysis interval in seconds"
-                   aria-valuemin="3" aria-valuemax="30" aria-valuenow="5">
+                   aria-valuemin="3" aria-valuemax="30" aria-valuenow="30">
             <span class="range-value" id="interval-display"
-                  aria-live="polite" aria-atomic="true">5s</span>
+                  aria-live="polite" aria-atomic="true">30s</span>
           </div>
         </div>
 

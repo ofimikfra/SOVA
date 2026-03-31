@@ -28,7 +28,7 @@ class SovaApi:
             try:
                 from main import run_system
                 run_system(
-                    source      = "screen",
+                    source      = "webcam",
                     headless    = True,          # no cv2.imshow()
                     stop_event  = self._stop_event,
                 )

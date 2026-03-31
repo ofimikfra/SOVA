@@ -17,50 +17,81 @@ def _confidence_tier(conf: float) -> str:
 # ── System prompt ─────────────────────────────────────────────────────────────
 
 _SYSTEM = (
-    "You describe a person on a video call in one short, casual sentence. "
-    "Maximum 12 words. "
-    "Third-person only — 'The person', 'They', or 'Their'. "
-    "Never use: 'I', 'but', 'however', 'although', 'confidence', 'uncertain', 'unsure', 'despite'. "
-    "Never mention confidence, certainty, or your own limitations. "
-    "Never add anything after the final period."
+    "You are describing a person's state during a video call. "
+    "Write exactly ONE short, human-like, casual sentence, maximum 10 words. "
+    "Don't make the sentence complicated or dramatic."
+    "Use simple language."
+    "Never use first-person ('I', 'I'm', 'I think', 'I can't'). "
+    # "Never say 'but', 'however', 'although', 'though', 'genuinely', 'clearly', 'obviously'. "
+    "Never trail off or explain your uncertainty. "
+    "Never contradict yourself in the same sentence. "
+    "End cleanly with a single period. "
+    "Use only third-person: 'The person', 'They', 'Their'."
 )
 
-# The model only sees the tone instruction — not the word "confidence"
-_TONE = {
-    "low":    "Use soft observational words: 'seems', 'looks', 'might be', 'appears'.",
-    "medium": "Use mild language: 'appears to be', 'seems to be', 'looks like'.",
-    "high":   "Be direct and factual. No hedging words.",
-}
-
-_EXAMPLES = {
-    "low":    "Example: 'The person seems a little distracted.'",
-    "medium": "Example: 'They appear to be engaged and listening.'",
-    "high":   "Example: 'The person is smiling and nodding.'",
+_CONFIDENCE_INSTRUCTION = {
+    "low": (
+        "You MUST use uncertain words: "
+        "'seems', 'appears', 'might be', 'looks like'. "
+        "NEVER use certain words like 'is', 'looks happy', 'clearly', 'genuinely'. "
+        "DO NOT say that the confidence level is low."
+    ),
+    "medium": (
+        "Use hedged language only: "
+        "'appears to be', 'seems to be', 'looks like they'. "
+        "NEVER use 'is' as a certainty. "
+        "DO NOT say that the confidence level is low."
+    ),
+    "high": (
+        "Be direct, no hedging words. "
+    ),
 }
 
 
 # ── Prompt builder ────────────────────────────────────────────────────────────
 
-def _build_prompt(expression: str, gesture: str,
-                  action: str, sentiment: str, overall_conf: float) -> str:
-    tier = _confidence_tier(overall_conf)
+def _build_prompt(expression: str, gesture: str, action: str,
+                  nlp_label: str | None, nlp_conf: float | None,
+                  overall_conf: float) -> str:
+
+    tier             = _confidence_tier(overall_conf)
+    conf_instruction = _CONFIDENCE_INSTRUCTION[tier]
 
     gesture_line = f"Gesture: {gesture}" if gesture != "No Gesture" else ""
     action_line  = f"Body:    {action}"  if action  != "Person Center" else ""
 
-    signals = "\n".join(filter(None, [
+    # Only include speech if captions were actually present
+    speech_line   = ""
+    conflict_line = ""
+    if nlp_label is not None:
+        speech_line = f"Speech sentiment: {nlp_label} ({nlp_conf:.0%} confidence)"
+
+        conflict = (
+            (expression == "Smiling"  and nlp_label == "negative") or
+            (expression == "Frowning" and nlp_label == "positive")
+        )
+        if conflict:
+            conflict_line = (
+                "Note: expression and speech conflict — "
+                "consider sarcasm or mixed feelings."
+            )
+
+    lines = filter(None, [
         f"Expression: {expression}",
         gesture_line,
         action_line,
-        f"Sentiment:  {sentiment}",
-    ]))
+        speech_line,
+        conflict_line,
+        f"Confidence: {overall_conf:.0%}",
+    ])
 
     return (
         f"{_SYSTEM}\n"
-        f"{_TONE[tier]} {_EXAMPLES[tier]}\n\n"
-        f"Signals:\n{signals}\n\n"
-        f"One sentence. End with a period. Nothing after it.\n"
-        f"Description:"
+        f"{conf_instruction}\n\n"
+        f"Observed signals:\n"
+        + "\n".join(lines)
+        + "\n\nWrite one sentence only. No 'but', no 'I', no trailing thoughts.\n"
+        + "Description:"
     )
 
 
@@ -82,9 +113,9 @@ def _call_ollama(prompt: str) -> str | None:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                    "temperature": 0.4,  # low = obedient, less rambling
-                    "num_predict": 30,   # 12 words ≈ 18 tokens, 30 is a safe cap
-                },
+                "temperature": 0.3,   # lower = more rule-following
+                "num_predict": 25,    # 12 words ≈ 16 tokens, 25 gives a little room
+            },
             },
             timeout=TIMEOUT_S,
         )
@@ -99,12 +130,16 @@ def _call_ollama(prompt: str) -> str | None:
         if "." in text:
             text = text[:text.index(".") + 1]
 
-        # Discard if any banned phrase survived
+        # Catch contradictions — e.g. "happy with a frown"
+        _CONTRADICTIONS = [
+            ("happy", "frown"), ("happy", "concerned"), ("happy", "worried"),
+            ("smiling", "frown"), ("positive", "confused"),
+        ]
         lower = text.lower()
-        for phrase in _BAD_PHRASES:
-            if phrase in lower:
-                print(f"[DESCRIPTION] Rejected — contained '{phrase}': {text}")
-                return None  # fall through to template
+        for (a, b) in _CONTRADICTIONS:
+            if a in lower and b in lower:
+                text = ""   # discard — fall through to template
+                break
 
         return text.strip() if text.strip() else None
 
@@ -183,11 +218,13 @@ def _template_fallback(expression: str, gesture: str,
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
+# TODO: test prompt if body action not passed
 
-def summarize(expression: str, gesture: str,
-              action: str, sentiment: str,
+def summarize(expression: str, gesture: str, action: str,
+              nlp_label: str | None, nlp_conf: float | None,
               overall_conf: float) -> str:
-    prompt = _build_prompt(expression, gesture, action, sentiment, overall_conf)
+    prompt = _build_prompt(expression, gesture, "",#action,
+                           nlp_label, nlp_conf, overall_conf)
     result = _call_ollama(prompt)
 
     if gesture in ["Heart ❤️", "Finger Heart 🫰"]:
@@ -208,6 +245,22 @@ def summarize(expression: str, gesture: str,
         print(f"[DESCRIPTION] Ollama ({_confidence_tier(overall_conf)}): {result}")
         return result
 
-    result = _template_fallback(expression, gesture, action, sentiment, overall_conf)
+    # Template fallback — derive sentiment from what we have
+    if nlp_label is not None:
+        from src.processor import _fuse_sentiment
+        sentiment, _ = _fuse_sentiment(expression, nlp_label, nlp_conf)
+    else:
+        # No captions — use expression polarity directly
+        from src.processor import _EXPR_POLARITY
+        polarity, _ = _EXPR_POLARITY.get(expression, (0.0, 0.0))
+        if polarity > 0.25:
+            sentiment = "positive"
+        elif polarity < -0.25:
+            sentiment = "negative"
+        else:
+            sentiment = "neutral"
+
+    result = _template_fallback(expression, gesture, "", #action, 
+                                sentiment, overall_conf)
     print(f"[DESCRIPTION] Template ({_confidence_tier(overall_conf)}): {result}")
     return result

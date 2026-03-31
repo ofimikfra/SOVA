@@ -31,5 +31,11 @@
       "resources": ["logo.png", "dashboard.html", "styles.css", "dashboard.js"],
       "matches": ["<all_urls>"]
     }
-  ]
+  ],
+  "icons": {
+    "16": "logo.png",
+    "32": "logo.png",
+    "48": "logo.png",
+    "128": "logo.png"
+  }
 }

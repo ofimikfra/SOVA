@@ -1,9 +1,9 @@
 import time
 from collections import defaultdict
-from src.nlp_engine import analyze as nlp_analyze
+from models.nlp_engine import analyze as nlp_analyze
 from src.description_engine import summarize, _confidence_tier
 
-INTERVAL = 15.0  # seconds
+INTERVAL = 30.0  # seconds
 
 _next_flush_time = time.time() + INTERVAL
 
@@ -25,6 +25,21 @@ _EXPR_POLARITY = {
     "Mouth Open":       ( 0.10, 0.3),  # ambiguous — near neutral
     "Frowning":         (-0.85, 0.9),
     "Neutral":          ( 0.00, 0.0),  # no signal
+}
+
+# ── Expression priority hierarchy ──────────────────────────────────────────────
+# Higher number = higher priority. Applied as a multiplier to accumulated score
+# so a high-priority expression can win even with fewer detections.
+# Only used for expression buffers — gestures/actions are score-only.
+
+_EXPR_PRIORITY = {
+    "Mouth Open":       5,
+    "Left Wink":        4,
+    "Right Wink":       4,
+    "Eyebrows Raised":  3,
+    "Frowning":         2,
+    "Smiling":          2,
+    "Neutral":          1,
 }
 
 
@@ -101,9 +116,14 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     expr_confs    = [c for _, c in _expr_buffer] if _expr_buffer else [1.0]
     avg_expr_conf = sum(expr_confs) / len(expr_confs)
 
-    expression = _getDominant(_expr_buffer,  neutral="Neutral",       label="EXPRESSION")
-    gesture    = _getDominant(_gest_buffer,  neutral="No Gesture",    label="GESTURE")
-    action     = _getDominant(_action_buffer,neutral="Person Center", label="ACTION")
+    expression = _getDominant(
+        _expr_buffer,
+        neutral="Neutral",
+        label="EXPRESSION",
+        priorities=_EXPR_PRIORITY,
+    )
+    gesture = _getDominant(_gest_buffer,  neutral="No Gesture",    label="GESTURE")
+    action  = _getDominant(_action_buffer, neutral="Person Center", label="ACTION")
 
     _expr_buffer.clear()
     _gest_buffer.clear()
@@ -116,7 +136,15 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
 
     overall_conf = round(0.60 * sent_conf + 0.40 * avg_expr_conf, 3)
 
-    description = summarize(expression, gesture, action, sentiment, overall_conf)
+    # In flushAll():
+    had_captions = bool(captions)
+
+    description = summarize(
+        expression, gesture, action,
+        nlp_label   = nlp_label  if had_captions else None,
+        nlp_conf    = nlp_conf   if had_captions else None,
+        overall_conf= overall_conf,
+    )
 
     print(f"\n{'='*50}")
     print(f"[FLUSH] Results after {INTERVAL:.0f}s interval:")
@@ -140,7 +168,9 @@ def set_interval(seconds: float):
 
 # ── Internal ───────────────────────────────────────────────────────────────────
 
-def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
+def _getDominant(buffer: list, neutral: str,
+                 label: str = "",
+                 priorities: dict | None = None) -> str:
     if not buffer:
         print(f"  [{label}] Buffer empty → {neutral}")
         return neutral
@@ -152,16 +182,22 @@ def _getDominant(buffer: list, neutral: str, label: str = "") -> str:
         scores[lbl] += conf
         counts[lbl] += 1
 
-    non_neutral = {k: v for k, v in scores.items() if k != neutral}
+    # Apply priority multipliers if provided
+    weighted = {
+        lbl: score * priorities.get(lbl, 1)
+        for lbl, score in scores.items()
+    } if priorities else scores
+
+    non_neutral = {k: v for k, v in weighted.items() if k != neutral}
 
     if non_neutral:
         top           = max(non_neutral, key=non_neutral.get)
         top_score     = non_neutral[top]
-        neutral_score = scores.get(neutral, 0.0)
+        neutral_score = weighted.get(neutral, 0.0)
 
         if neutral_score >= top_score:
             if top_score >= 3.0:
                 return top
             return neutral
 
-    return max(scores, key=scores.get)
+    return max(weighted, key=weighted.get)

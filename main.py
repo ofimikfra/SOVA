@@ -13,7 +13,8 @@ from models.gesture_v4 import detectGesture
 from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
-from src.ollama_manager import ensure_ollama
+import src.audio_capture        as _audio
+import src.stt_engine as _transcription
 
 from src import config as _config
 import src.processor as _processor
@@ -25,16 +26,16 @@ _current_config = _config.load()
 def _apply_settings(partial: dict):
     global _current_config
     _current_config = _config.update(partial)
+
     if "flush_interval" in partial:
         _processor.set_interval(float(partial["flush_interval"]))
+
     if "tts_enabled" in partial:
         _tts.set_enabled(partial["tts_enabled"])
-    if "ollama_model" in partial:
-        threading.Thread(
-            target=ensure_ollama,
-            args=(partial["ollama_model"],),
-            daemon=True
-        ).start()
+
+    if "tts_volume" in partial:
+        _tts.set_volume(float(partial["tts_volume"]), play_test=True)
+
     print(f"[CONFIG] Settings updated: {partial}")
     _broadcast_sync({"type": "config", **_current_config})
 
@@ -47,8 +48,6 @@ WS_HOST = "localhost"
 WS_PORT = 8765
 
 _ws_clients: set = set()
-_caption_queue: list = []
-_caption_lock = threading.Lock()
 _ws_loop: asyncio.AbstractEventLoop | None = None
 
 
@@ -59,21 +58,12 @@ async def _ws_handler(websocket):
         async for raw in websocket:
             try:
                 msg = json.loads(raw)
-
-                if msg.get("type") == "caption":
-                    text = msg.get("text", "").strip()
-                    if text:
-                        with _caption_lock:
-                            _caption_queue.append(text)
-
-                elif msg.get("type") == "settings":
-                    partial = {k: v for k, v in msg.items() if k != "type"}
-                    _apply_settings(partial)
-
+                if msg.get("type") == "settings":
+                    _apply_settings(msg)
                 elif msg.get("type") == "get_config":
-                    reply = json.dumps({"type": "config", **_current_config})
-                    await websocket.send(reply)
-
+                    await websocket.send(json.dumps(
+                        {"type": "config", **_current_config}
+                    ))
             except json.JSONDecodeError:
                 pass
     except (websockets.exceptions.ConnectionClosedOK,
@@ -102,54 +92,42 @@ def _broadcast_sync(payload: dict):
         asyncio.run_coroutine_threadsafe(_ws_broadcast(payload), _ws_loop)
 
 
-async def _ws_serve(stop_event: threading.Event):
-    # ── origins=None accepts connections from any origin (e.g. meet.google.com)
-    async with websockets.serve(_ws_handler, WS_HOST, WS_PORT, origins=None):
+async def _ws_serve():
+    async with websockets.serve(_ws_handler, WS_HOST, WS_PORT):
         print(f"[WS] Server listening on ws://{WS_HOST}:{WS_PORT}")
-        # Poll stop_event instead of running forever —
-        # this lets the port be released cleanly on stop
-        while not stop_event.is_set():
-            await asyncio.sleep(0.1)
-    print("[WS] Server stopped, port released.")
+        await asyncio.get_event_loop().create_future()
 
 
-def _start_ws_thread(stop_event: threading.Event):
-    global _ws_loop, _ws_clients
-    _ws_clients = set()          # reset clients on each start
+def _start_ws_thread():
+    global _ws_loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     _ws_loop = loop
-    loop.run_until_complete(_ws_serve(stop_event))
-    loop.close()
-    _ws_loop = None              # clear so _broadcast_sync doesn't use dead loop
+    loop.run_until_complete(_ws_serve())
 
 
 # ─────────────────────────────────────────────
 #  Main Detection Loop
 # ─────────────────────────────────────────────
 
-accumulated_captions: list[str] = []
+def run_system(callback=None, source="webcam", headless=False, stop_event: threading.Event | None = None):
 
-def run_system(callback=None, source="webcam",
-               headless=False,
-               stop_event: threading.Event | None = None):
-
-    if stop_event is None:
-        stop_event = threading.Event()
-
-    # Start WebSocket server — pass stop_event so it shuts down cleanly
-    ws_thread = threading.Thread(
-        target=_start_ws_thread, args=(stop_event,), daemon=True
-    )
+    # ── WebSocket ─────────────────────────────
+    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
     ws_thread.start()
     time.sleep(0.5)
 
-    # Ollama auto-start
-    cfg   = _config.load()
-    model = cfg.get("ollama_model", "llama3.2:3b")
-    if not ensure_ollama(model):
-        print("[SOVA] Continuing without Ollama — template descriptions will be used.")
+    # ── Audio capture + transcription ─────────
+    audio_ok = _audio.start()
+    if audio_ok:
+        _transcription.start(_audio.get_queue())
+    else:
+        print("[SOVA] ⚠️  Audio capture unavailable — sentiment will be expression-only.")
 
+    # Apply saved TTS settings
+    _tts.set_volume(float(_current_config.get("tts_volume", 0.25)))
+
+    # ── Video source ──────────────────────────
     if source == "screen":
         get_frame = getScreenFrame
         mirror    = False
@@ -159,19 +137,19 @@ def run_system(callback=None, source="webcam",
         mirror    = True
         print("[SOVA] Monitoring Webcam...")
 
-    # Initialise display state — overlay never crashes before first flush
-    display_expr      = "Neutral"
-    display_gest      = "No Gesture"
-    display_act       = "Person Center"
-    display_sentiment = "neutral"
-    display_conf      = 0.0
-    display_desc      = "Waiting for first analysis..."
+    display_expr = "Neutral"
+    display_gest = "No Gesture"
+    display_act  = "Person Center"
+    sentiment    = "neutral"
+    sent_conf    = 1.0
+    description  = ""
 
-    print("[SOVA] Engine Active.")
-    if not headless:
-        print("[SOVA] Press 'q' on the video window to stop.")
+    # Accumulate transcripts across frames — only cleared on a successful flush
+    accumulated_transcripts: list[str] = []
 
-    while not stop_event.is_set():
+    print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
+
+    while not (stop_event and stop_event.is_set()):
         frame = get_frame()
         if frame is None:
             continue
@@ -183,86 +161,84 @@ def run_system(callback=None, source="webcam",
         rgb   = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
 
-        # 1. Facial Expressions
+        # 1. Facial expressions
         results = face_mesh.detect(image)
         raw_expr, expr_conf = "Neutral", 1.0
         if results.face_landmarks:
             for face_landmarks in results.face_landmarks:
                 raw_expr, expr_conf = detectExpression(face_landmarks, h, w)
-                if not headless:
-                    xs = [lm.x * w for lm in face_landmarks]
-                    ys = [lm.y * h for lm in face_landmarks]
-                    cv2.rectangle(frame,
-                        (int(min(xs)), int(min(ys))),
-                        (int(max(xs)), int(max(ys))),
-                        (0, 255, 0), 2)
+                xs = [lm.x * w for lm in face_landmarks]
+                ys = [lm.y * h for lm in face_landmarks]
+                cv2.rectangle(frame,
+                    (int(min(xs)), int(min(ys))),
+                    (int(max(xs)), int(max(ys))),
+                    (0, 255, 0), 2)
 
-        # 2. Gestures & Body Actions
+        # 2. Gestures & body actions
         raw_gest,   gest_conf   = detectGesture(frame)
         raw_action, action_conf = detectBodyAction(frame)
 
-        # 3. Feed Processor
+        # 3. Feed processor
         processExpression(raw_expr,   expr_conf)
         processGesture(raw_gest,      gest_conf)
         processBodyAction(raw_action, action_conf)
 
-        # 4. Drain caption queue into accumulator
-        with _caption_lock:
-            accumulated_captions.extend(_caption_queue)
-            _caption_queue.clear()
+        # 4. Drain transcript queue each frame
+        if audio_ok:
+            accumulated_transcripts.extend(_transcription.drain())
 
-        # 5. Flush every N seconds — pass full accumulated captions
-        stable_results = flushAll(captions=accumulated_captions)
+        # 5. Flush every N seconds
+        # Pass None when there's nothing — processor treats it as no speech signal
+        captions_for_flush = accumulated_transcripts if accumulated_transcripts else None
+        stable_results = flushAll(captions=captions_for_flush)
+
         if stable_results:
-            accumulated_captions.clear()   # ← only clear when flush actually fired
             expr, gest, act, sentiment, sent_conf, description = stable_results
+            display_expr, display_gest, display_act = expr, gest, act
 
-            display_expr      = expr
-            display_gest      = gest
-            display_act       = act
-            display_sentiment = sentiment
-            display_conf      = sent_conf
-            display_desc      = description
+            # Only clear after a successful flush
+            accumulated_transcripts.clear()
 
             _broadcast_sync({
-                "type":             "result",
-                "expression":       expr,
-                "gesture":          gest,
-                "action":           act,
-                "sentiment":        sentiment,
-                "sentimentConf":    sent_conf,
-                "summary":          description,   
+                "type":          "result",
+                "expression":    expr,
+                "gesture":       gest,
+                "action":        act,
+                "sentiment":     sentiment,
+                "sentimentConf": sent_conf,
+                "description":   description,
             })
 
             if callback:
                 callback(expr, gest, act, description)
 
-            speak(description)
+            threading.Thread(target=speak, args=(description,), daemon=True).start()
 
-        # 6. Visual overlay — only when not running headless
+        # 6. Visual overlay
+        audio_label = "audio ✓" if audio_ok else "audio ✗"
+        overlay_lines = [
+            f"Expression:  {display_expr}",
+            f"Gesture:     {display_gest}",
+            f"Action:      {display_act}",
+            f"Sentiment:   {sentiment} ({sent_conf:.0%})",
+            f"Description: {description}",
+            f"WS: {len(_ws_clients)}  |  {audio_label}",
+        ]
+
+        for i, line in enumerate(overlay_lines):
+            cv2.putText(frame, line, (20, h - 30 - (i * 35)),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
+
         if not headless:
-            overlay_lines = [
-                f"Expression:  {display_expr}",
-                f"Gesture:     {display_gest}",
-                f"Action:      {display_act}",
-                f"Sentiment:   {display_sentiment} ({display_conf:.0%})",
-                f"Description: {display_desc}",
-                f"WS clients:  {len(_ws_clients)}",
-            ]
-            for i, line in enumerate(overlay_lines):
-                cv2.putText(frame, line, (20, h - 30 - (i * 35)),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.8, (0, 255, 0), 2)
-
             cv2.imshow("SOVA", frame)
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                stop_event.set()
+            if cv2.waitKey(1) & 0xFF == ord("q"):
                 break
 
-    if not headless:
-        cv2.destroyAllWindows()
-
-    print("[SOVA] Engine stopped.")
+    # ── Cleanup ───────────────────────────────
+    _audio.stop()
+    _transcription.stop()
+    cv2.destroyAllWindows()
 
 
 if __name__ == "__main__":
-    run_system(source="webcam")
+    run_system(source="screen")

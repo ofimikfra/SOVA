@@ -18,19 +18,21 @@ _classifier = pipeline(
 print("[NLP] Model ready.")
 
 
-def analyze(captions: list[str]) -> tuple[str, float]:
+def analyze(audio: list[str]) -> tuple[str, float]:
     """
     Takes a list of raw caption strings from the current flush window.
     Returns (label, confidence) where label is 'positive', 'negative',
     or 'neutral'.
     """
-    if not captions:
-        return "neutral", 1.0
+    if not audio:
+        print("[NLP] No audio detected.")
+        return "Neutral", 1.0
 
     # Join into one block — DistilBERT handles up to 512 tokens
-    text = " ".join(captions).strip()
+    text = " ".join(audio).strip()
     if not text:
-        return "neutral", 1.0
+        print("[NLP] No audio detected.")
+        return "Neutral", 1.0
 
     result = _classifier(text)[0]
 

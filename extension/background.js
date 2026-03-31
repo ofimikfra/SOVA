@@ -1,13 +1,13 @@
 // ─────────────────────────────────────────────
 //  SOVA Service Worker — background.js
 //  Owns the WebSocket connection to the local
-//  SOVA app. Content scripts relay through here
-//  to avoid Chrome's Private Network Access block.
+//  SOVA app. Forwards video frames from the
+//  Meet content script and routes results back.
 // ─────────────────────────────────────────────
 
-const WS_URL            = "ws://localhost:8765";
-const RECONNECT_DELAY   = 3000;
-const DASHBOARD_URL     = chrome.runtime.getURL("dashboard.html");
+const WS_URL          = "ws://localhost:8765";
+const RECONNECT_DELAY = 3000;
+const DASHBOARD_URL   = chrome.runtime.getURL("dashboard.html");
 
 let socket          = null;
 let _dashboardTabId = null;
@@ -31,7 +31,7 @@ function connect() {
       if (msg.type === "result" && _meetTabId !== null) {
         chrome.tabs.sendMessage(_meetTabId, msg).catch(() => {});
       }
-      // Forward config to dashboard tab
+      // Forward config/results to dashboard tab
       if ((msg.type === "result" || msg.type === "config") && _dashboardTabId !== null) {
         chrome.tabs.sendMessage(_dashboardTabId, msg).catch(() => {});
       }
@@ -59,19 +59,16 @@ function sendToApp(payload) {
 }
 
 function broadcastStatus(connected) {
-  // Notify popup if open
   chrome.runtime.sendMessage({ type: "sova_status", connected }).catch(() => {});
-  // Notify Meet tab
   if (_meetTabId !== null) {
     chrome.tabs.sendMessage(_meetTabId, {
-      type: "sova_status", connected
+      type: "sova_status", connected,
     }).catch(() => {});
   }
 }
 
 
 // ── Message routing ───────────────────────────
-// Receives messages from content.js and popup.js
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
@@ -83,14 +80,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // caption from content.js → forward to app
-  if (msg.type === "caption") {
-    sendToApp({ type: "caption", text: msg.text });
+  // Video frame from content.js → forward to SOVA app
+  if (msg.type === "frame") {
+    sendToApp({ type: "frame", data: msg.data });
     sendResponse({ ok: true });
     return;
   }
 
-  // settings from dashboard → forward to app
+  // Settings from dashboard → forward to app
   if (msg.type === "settings") {
     sendToApp(msg);
     sendResponse({ ok: true });
@@ -104,19 +101,19 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 
-  // popup or dashboard requesting connection status
+  // Popup or dashboard requesting connection status
   if (msg.type === "get_status") {
     sendResponse({ connected: socket?.readyState === WebSocket.OPEN });
     return true;
   }
 
-  // open dashboard tab
+  // Open dashboard tab
   if (msg.type === "open_dashboard") {
     openDashboard().then(() => sendResponse({ ok: true }));
     return true;
   }
 
-  // keepalive ping from content.js
+  // Keepalive ping from content.js
   if (msg.type === "ping") {
     sendResponse({ pong: true });
     return;
@@ -153,7 +150,7 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") openDashboard();
 });
 
-// Keepalive alarm — prevents service worker from going idle
+// Keepalive — prevents service worker from going idle
 chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
 chrome.alarms.onAlarm.addListener(() => {});
 

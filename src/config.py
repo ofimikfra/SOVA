@@ -11,8 +11,9 @@ CONFIG_PATH = os.path.join(os.path.dirname(__file__), "..", "config.json")
 
 DEFAULTS = {
     "ollama_model":   "llama3.2:3b",
-    "flush_interval": 5,        # seconds
+    "flush_interval": 30,
     "tts_enabled":    True,
+    "tts_volume":     0.25,      # 0.0–1.0
 }
 
 
@@ -23,7 +24,6 @@ def load() -> dict:
     try:
         with open(CONFIG_PATH, "r") as f:
             data = json.load(f)
-        # Fill in any missing keys from defaults
         for k, v in DEFAULTS.items():
             data.setdefault(k, v)
         return data
