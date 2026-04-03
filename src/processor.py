@@ -139,11 +139,15 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     # In flushAll():
     had_captions = bool(captions)
 
+    sentiment_to_use = sentiment if had_captions else "neutral"
+
     description = summarize(
-        expression, gesture, action,
-        nlp_label   = nlp_label  if had_captions else None,
-        nlp_conf    = nlp_conf   if had_captions else None,
-        overall_conf= overall_conf,
+        expression,
+        gesture,
+        action,
+        nlp_label if had_captions else None,  # nlp_label
+        nlp_conf if had_captions else None,  # nlp_conf
+        overall_conf
     )
 
     print(f"\n{'='*50}")

@@ -228,15 +228,13 @@ def summarize(expression: str, gesture: str, action: str,
     result = _call_ollama(prompt)
 
     if gesture in ["Heart ❤️", "Finger Heart 🫰"]:
-        prompt = _build_prompt(expression, gesture, action, sentiment, overall_conf)
+        prompt = _build_prompt(expression, gesture, action, nlp_label, nlp_conf, overall_conf)
         result = _call_ollama(prompt)
 
-        # If Ollama behaves → use it
         if result and ("love" in result.lower() or "affection" in result.lower()):
             print("[DESCRIPTION] Heart (Ollama):", result)
             return result
 
-        # If not → force correct meaning
         fallback = "The person is sending love."
         print("[DESCRIPTION] Heart Fallback:", fallback)
         return fallback

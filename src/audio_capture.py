@@ -284,7 +284,7 @@ def _sounddevice_loop(device_index: int, use_wasapi_loopback: bool = False):
     frames_per_chunk = int(SAMPLE_RATE * CHUNK_SEC)
     extra_kwargs = {}
     if use_wasapi_loopback and sys.platform == "win32":
-        extra_kwargs["extra_settings"] = sd.WasapiSettings(loopback=True)
+        extra_kwargs["extra_settings"] = sd.WasapiSettings(exclusive=False)
 
     print(f"[AUDIO] Capturing via sounddevice (device {device_index})...")
 
@@ -395,19 +395,20 @@ def start(device_index: int | None = None) -> bool:
             _capture_thread.start()
             return True
 
+
     elif sys.platform == "win32":
-        dev = device_index or _find_loopback_device_sd()
-        if dev is None:
-            print("[AUDIO] Could not find a WASAPI loopback device.")
-            return False
-        _capture_thread = threading.Thread(
-            target=_sounddevice_loop,
-            args=(dev, True),
-            daemon=True,
-            name="audio-capture-wasapi",
-        )
-        _capture_thread.start()
-        return True
+
+        try:
+
+            default_output = sd.default.device[1]  # output device index
+
+            print(f"[AUDIO] Using default output device (loopback): {default_output}")
+
+            return default_output
+
+        except Exception:
+
+            return None
 
     else:
         dev = device_index or _find_loopback_device_sd()
