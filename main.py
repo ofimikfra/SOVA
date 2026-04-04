@@ -14,11 +14,12 @@ from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
 import src.audio_capture        as _audio
-import src.stt_engine as _transcription
+import src.stt_engine as _stt
 
 from src import config as _config
 import src.processor as _processor
 import src.tts_engine as _tts
+from src.translator import translate, is_rtl
 
 _current_config = _config.load()
 
@@ -32,9 +33,6 @@ def _apply_settings(partial: dict):
 
     if "tts_enabled" in partial:
         _tts.set_enabled(partial["tts_enabled"])
-
-    if "tts_volume" in partial:
-        _tts.set_volume(float(partial["tts_volume"]), play_test=True)
 
     print(f"[CONFIG] Settings updated: {partial}")
     _broadcast_sync({"type": "config", **_current_config})
@@ -110,22 +108,37 @@ def _start_ws_thread():
 #  Main Detection Loop
 # ─────────────────────────────────────────────
 
-def run_system(callback=None, source="webcam", headless=False, stop_event: threading.Event | None = None):
+def run_system(callback=None, source="screen", headless=False,
+               stop_event=None, ws_broadcast=None):
+    # ws_broadcast: callable provided by app.py when running as desktop app.
+    # When None we start our own WS server (standalone / CLI mode).
 
-    # ── WebSocket ─────────────────────────────
-    ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
-    ws_thread.start()
-    time.sleep(0.5)
+    # ── Load config fresh at engine start ─────
+    # This ensures any settings saved while the engine was stopped
+    # (via pywebview api or WS) are picked up before the loop runs.
+    cfg = _config.load()
+    _processor.set_interval(float(cfg.get("flush_interval", 30)))
+    _tts.set_enabled(cfg.get("tts_enabled", True))
+    _tts.set_volume(cfg.get("tts_volume", 0.25))
+    print(f"[SOVA] Loaded config: interval={cfg.get('flush_interval')}s  "
+          f"tts={'on' if cfg.get('tts_enabled') else 'off'}  "
+          f"model={cfg.get('ollama_model')}")
+
+    # ── WebSocket ─────────────────────────────────────────
+    if ws_broadcast is None:
+        ws_thread = threading.Thread(target=_start_ws_thread, daemon=True)
+        ws_thread.start()
+        time.sleep(0.5)
+        broadcast = _broadcast_sync
+    else:
+        broadcast = ws_broadcast
 
     # ── Audio capture + transcription ─────────
     audio_ok = _audio.start()
     if audio_ok:
-        _transcription.start(_audio.get_queue())
+        _stt.start(_audio.get_queue())
     else:
         print("[SOVA] ⚠️  Audio capture unavailable — sentiment will be expression-only.")
-
-    # Apply saved TTS settings
-    _tts.set_volume(float(_current_config.get("tts_volume", 0.25)))
 
     # ── Video source ──────────────────────────
     if source == "screen":
@@ -144,10 +157,12 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
     sent_conf    = 1.0
     description  = ""
 
-    # Accumulate transcripts across frames — only cleared on a successful flush
     accumulated_transcripts: list[str] = []
 
     print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
+
+    # Broadcast NOW — models loaded, loop starting, truly ready
+    broadcast({"type": "engine_status", "running": True})
 
     while not (stop_event and stop_event.is_set()):
         frame = get_frame()
@@ -185,10 +200,9 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
         # 4. Drain transcript queue each frame
         if audio_ok:
-            accumulated_transcripts.extend(_transcription.drain())
+            accumulated_transcripts.extend(_stt.drain())
 
         # 5. Flush every N seconds
-        # Pass None when there's nothing — processor treats it as no speech signal
         captions_for_flush = accumulated_transcripts if accumulated_transcripts else None
         stable_results = flushAll(captions=captions_for_flush)
 
@@ -196,10 +210,12 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
             expr, gest, act, sentiment, sent_conf, description = stable_results
             display_expr, display_gest, display_act = expr, gest, act
 
-            # Only clear after a successful flush
             accumulated_transcripts.clear()
 
-            _broadcast_sync({
+            lang        = _config.load().get("language", "en")
+            description = translate(description, lang)
+
+            broadcast({
                 "type":          "result",
                 "expression":    expr,
                 "gesture":       gest,
@@ -207,12 +223,15 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
                 "sentiment":     sentiment,
                 "sentimentConf": sent_conf,
                 "description":   description,
+                "summary":       description,
+                "language":      lang,          
+                "rtl":           is_rtl(lang), 
             })
 
             if callback:
                 callback(expr, gest, act, description)
 
-            threading.Thread(target=speak, args=(description,), daemon=True).start()
+            threading.Thread(target=speak, args=(description, lang), daemon=True).start()
 
         # 6. Visual overlay
         audio_label = "audio ✓" if audio_ok else "audio ✗"
@@ -236,7 +255,7 @@ def run_system(callback=None, source="webcam", headless=False, stop_event: threa
 
     # ── Cleanup ───────────────────────────────
     _audio.stop()
-    _transcription.stop()
+    _stt.stop()
     cv2.destroyAllWindows()
 
 

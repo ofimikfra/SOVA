@@ -1,22 +1,32 @@
 // ─────────────────────────────────────────────
 //  SOVA Service Worker — background.js
 //  Owns the WebSocket connection to the local
-//  SOVA app. Forwards video frames from the
-//  Meet content script and routes results back.
+//  SOVA app. Content scripts relay through here
+//  to avoid Chrome's Private Network Access block.
 // ─────────────────────────────────────────────
 
-const WS_URL          = "ws://localhost:8765";
-const RECONNECT_DELAY = 3000;
-const DASHBOARD_URL   = chrome.runtime.getURL("dashboard.html");
+const WS_URL            = "ws://localhost:8765";
+const RECONNECT_DELAY   = 3000;
+const DASHBOARD_URL     = chrome.runtime.getURL("dashboard.html");
 
 let socket          = null;
 let _dashboardTabId = null;
 let _meetTabId      = null;
+let _engineRunning  = false;
+let _intentionalClose = false;
 
 
 // ── WebSocket ─────────────────────────────────
 
 function connect() {
+  // Close any stale socket first. _intentionalClose prevents the close
+  // handler from scheduling a second connect() call.
+  if (socket) {
+    _intentionalClose = true;
+    socket.close();
+    socket = null;
+  }
+
   socket = new WebSocket(WS_URL);
 
   socket.addEventListener("open", () => {
@@ -27,13 +37,26 @@ function connect() {
   socket.addEventListener("message", (event) => {
     try {
       const msg = JSON.parse(event.data);
-      // Forward results to the Meet tab's content script
-      if (msg.type === "result" && _meetTabId !== null) {
+      if (msg.type === "result" && msg.description && !msg.summary) {
+        msg.summary = msg.description;
+      }
+      // route result messages carefully — don't duplicate when the
+      // dashboard and meet tab id are the same
+      if (msg.type === "result" && _meetTabId !== null && _meetTabId !== _dashboardTabId) {
         chrome.tabs.sendMessage(_meetTabId, msg).catch(() => {});
       }
-      // Forward config/results to dashboard tab
+      if (msg.type === "result") {
+        chrome.runtime.sendMessage(msg).catch(() => {});
+      }
       if ((msg.type === "result" || msg.type === "config") && _dashboardTabId !== null) {
         chrome.tabs.sendMessage(_dashboardTabId, msg).catch(() => {});
+      }
+      if (msg.type === "engine_status") {
+        _engineRunning = msg.running ?? false;
+        chrome.runtime.sendMessage(msg).catch(() => {});
+        if (_dashboardTabId !== null) {
+          chrome.tabs.sendMessage(_dashboardTabId, msg).catch(() => {});
+        }
       }
     } catch (e) {
       console.warn("[SOVA BG] Bad message:", e);
@@ -41,15 +64,14 @@ function connect() {
   });
 
   socket.addEventListener("close", () => {
+    if (_intentionalClose) { _intentionalClose = false; return; }
     console.warn("[SOVA BG] Disconnected — retrying in 3s...");
     broadcastStatus(false);
     socket = null;
     setTimeout(connect, RECONNECT_DELAY);
   });
 
-  socket.addEventListener("error", () => {
-    socket?.close();
-  });
+  socket.addEventListener("error", () => { socket?.close(); });
 }
 
 function sendToApp(payload) {
@@ -61,9 +83,10 @@ function sendToApp(payload) {
 function broadcastStatus(connected) {
   chrome.runtime.sendMessage({ type: "sova_status", connected }).catch(() => {});
   if (_meetTabId !== null) {
-    chrome.tabs.sendMessage(_meetTabId, {
-      type: "sova_status", connected,
-    }).catch(() => {});
+    chrome.tabs.sendMessage(_meetTabId, { type: "sova_status", connected }).catch(() => {});
+  }
+  if (_dashboardTabId !== null) {
+    chrome.tabs.sendMessage(_dashboardTabId, { type: "sova_status", connected }).catch(() => {});
   }
 }
 
@@ -80,14 +103,22 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  // Video frame from content.js → forward to SOVA app
-  if (msg.type === "frame") {
-    sendToApp({ type: "frame", data: msg.data });
-    sendResponse({ ok: true });
-    return;
+  // dashboard.js registering itself so results are always routed to it,
+  // even when the tab was opened by navigating directly to the URL
+  if (msg.type === "register_dashboard_tab") {
+    _dashboardTabId = sender.tab?.id ?? null;
+    console.log(`[SOVA BG] Dashboard tab registered: ${_dashboardTabId}`);
+    // if the same tab was previously registered as the Meet page, clear
+    // the meet registration so we don't send the same message twice
+    if (_dashboardTabId !== null && _dashboardTabId === _meetTabId) {
+      console.log("[SOVA BG] dashboard and meet tab are identical; clearing meet tab registration to avoid duplicates");
+      _meetTabId = null;
+    }
+    sendResponse({ ok: true, connected: socket?.readyState === WebSocket.OPEN });
+    return true;
   }
 
-  // Settings from dashboard → forward to app
+  // settings from dashboard → forward to app
   if (msg.type === "settings") {
     sendToApp(msg);
     sendResponse({ ok: true });
@@ -101,19 +132,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return;
   }
 
-  // Popup or dashboard requesting connection status
+  // popup or dashboard requesting connection status
   if (msg.type === "get_status") {
     sendResponse({ connected: socket?.readyState === WebSocket.OPEN });
     return true;
   }
 
-  // Open dashboard tab
+  if (msg.type === "get_engine_status") {
+    sendResponse({ running: _engineRunning });
+    return true;
+  }
+
+  if (msg.type === "start_engine" || msg.type === "stop_engine") {
+    sendToApp(msg);
+    sendResponse({ ok: true });
+    return true;
+  }
+
+  // open dashboard tab
   if (msg.type === "open_dashboard") {
     openDashboard().then(() => sendResponse({ ok: true }));
     return true;
   }
 
-  // Keepalive ping from content.js
+  // keepalive ping from content.js
   if (msg.type === "ping") {
     sendResponse({ pong: true });
     return;
@@ -150,7 +192,7 @@ chrome.runtime.onInstalled.addListener(({ reason }) => {
   if (reason === "install") openDashboard();
 });
 
-// Keepalive — prevents service worker from going idle
+// Keepalive alarm — prevents service worker from going idle
 chrome.alarms.create("keepalive", { periodInMinutes: 0.4 });
 chrome.alarms.onAlarm.addListener(() => {});
 

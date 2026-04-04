@@ -14,7 +14,7 @@
     --accentlb:   #3FD0EF;
     --hover:      #3FD0EF;
     --surface2:   #242424;
-    --border:     #2e2e2e;
+    --border:     #ffffff1c;
     --negative:   #ef5350;
     --positive:   #00C853;
     --neutral:    #888;
@@ -72,14 +72,13 @@ header {
     display: flex;
     align-items: center;
     gap: 10px;
-    font-size: 1.4rem;
+    font-size: 1.8rem;
     font-weight: 700;
     letter-spacing: 0.04em;
 }
 
 .logo img {
-  width: 30px;
-  height: 30px;
+    width: 40px;
 }
 
 /* ── Status pill ── */
@@ -96,13 +95,21 @@ header {
     transition: border-color 0.3s, background 0.3s;
 }
 #status-pill[data-status="connected"] {
-    border-color: var(--accentblue);
+    border-color: var(--positive);
     background: rgba(0, 200, 83, 0.08);
 }
 #status-pill[data-status="disconnected"] {
     border-color: var(--warn);
     background: rgba(255, 107, 53, 0.08);
 }
+#status-pill[data-status="starting"] {
+  border-color: var(--accentylw);
+  background: rgba(255, 200, 87, 0.08);
+}
+#status-pill[data-status="stopping"] {
+  border-color: var(--warn);
+  background: rgba(255, 126, 87, 0.08);
+} 
 .status-dot {
     width: 8px; height: 8px;
     border-radius: 50%;
@@ -110,8 +117,11 @@ header {
     transition: background 0.3s;
     flex-shrink: 0;
 }
-[data-status="connected"]    .status-dot { background: var(--accentblue); }
+[data-status="connected"]    .status-dot { background: var(--positive); }
 [data-status="disconnected"] .status-dot { background: var(--warn); }
+[data-status="starting"] .status-dot { background: var(--accentylw); }
+[data-status="starting"] #status-text::after { content: ""; }
+[data-status="stopping"] .status-dot { background: var(--warn); }
 
 /* ── Cards ── */
 .card {
@@ -274,8 +284,8 @@ header {
     transition:    transform 0.2s, background 0.2s;
 }
 .toggle input:checked + .toggle-track {
-    background:    rgba(0, 200, 83, 0.15);
-    border-color:  var(--accentmb);
+    background:    #1664797c;
+    border-color:  var(--accentblue);
 }
 .toggle input:checked + .toggle-track::after {
     transform:  translateX(22px);
@@ -366,13 +376,259 @@ input[type="range"] {
     font-weight:   700;
     font-size:     0.85rem;
     cursor:        pointer;
-    transition:    background 0.2s, transform 0.1s;
-    background:    var(--accent);
-    color:         #000;
+    transition:    background 0.2s, transform 0.1s, color 0.2s;
+    background: var(--accentblue);
+    color:         var(--text);
 }
-#start-btn:hover  { background: #00e676; }
+#start-btn:hover  { background: var(--hover); color: var(--bg); }
 #start-btn:active { transform: scale(0.97); }
 #start-btn[data-running="true"] {
     background: var(--warn);
-    color:      #fff;
+    color:      var(--text);
+}
+
+
+/* ── Screen-reader-only utility ── */
+.sr-only {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0,0,0,0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ── Card shortcut badge ── */
+.card-shortcut {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 8px;
+  width: 20px; height: 20px;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface2);
+  font-size: 0.65rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  letter-spacing: 0;
+  vertical-align: middle;
+}
+
+/* ── Icon button (help) ── */
+.icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px; height: 36px;
+  border-radius: 8px;
+  border: none;
+  background: none;
+  color: var(--text);
+  font-size: 1rem;
+  cursor: pointer;
+  transition: color 0.2s;
+}
+.icon-btn:hover { color: var(--accentlb);}
+
+/* ── Help Modal ── */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  z-index: 200;
+}
+
+.modal-box {
+  position: fixed;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 201;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 28px;
+  width: min(560px, 94vw);
+  max-height: 88vh;
+  overflow-y: auto;
+  outline: none;
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.modal-header h2 {
+  font-size: 1.15rem;
+  font-weight: 700;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.1rem;
+  cursor: pointer;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.2s, background 0.2s;
+  width: auto;
+}
+.modal-close:hover { color: var(--text); background: var(--surface2); }
+
+.modal-subtitle {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  margin-bottom: 20px;
+}
+
+.shortcut-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.shortcut-section-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--text-muted);
+  margin-bottom: 10px;
+}
+
+.shortcut-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.88rem;
+}
+.shortcut-row:last-child { border-bottom: none; }
+
+.shortcut-keys {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-width: 100px;
+}
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px 8px;
+  border-radius: 5px;
+  border: 1.5px solid var(--border);
+  background: var(--surface2);
+  color: var(--text);
+  font-family: monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: 0 2px 0 rgba(0,0,0,0.4);
+}
+
+.modal-tip {
+  margin-top: 20px;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.6;
+}
+
+/* ── Help Modal — Guide sections ── */
+.guide-section {
+  margin-bottom: 24px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-section:last-of-type {
+  border-bottom: none;
+  margin-bottom: 0;
+}
+
+/* ── Numbered steps ── */
+.guide-step {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.guide-step:last-child {
+  border-bottom: none;
+}
+
+.guide-step-number {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--accentmb);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 700;
+  margin-top: 1px;
+}
+
+.guide-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 0.88rem;
+  line-height: 1.55;
+}
+
+.guide-step-body strong {
+  color: var(--text);
+  font-size: 0.92rem;
+}
+
+.guide-step-body span {
+  color: var(--text-muted);
+}
+
+.guide-step-body kbd {
+  font-size: 0.72rem;
+  padding: 2px 6px;
+}
+
+/* ── Tips list ── */
+.guide-tips {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 0;
+}
+
+.guide-tips li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.guide-tips li::before {
+  content: "·";
+  position: absolute;
+  left: 4px;
+  color: var(--accentlb);
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.guide-tips li strong {
+  color: var(--text);
 }

@@ -1,7 +1,6 @@
 const WS_URL = "ws://localhost:8765";
 let socket = null;
 
-const dot        = document.getElementById("dot");
 const status     = document.getElementById("status");
 const latest     = document.getElementById("latest");
 const openDash   = document.getElementById("open-dash");
@@ -17,18 +16,6 @@ openDash.addEventListener("click", () => {
 volSlider.addEventListener("input", () => {
   updateVolumeDisplay(parseFloat(volSlider.value));
   sendVolume(parseFloat(volSlider.value));
-});
-
-// Arrow key shortcuts
-document.addEventListener("keydown", (e) => {
-  const STEP = 0.05;
-  if (e.key === "ArrowUp" || e.key === "ArrowRight") {
-    e.preventDefault();
-    setVolume(parseFloat(volSlider.value) + STEP);
-  } else if (e.key === "ArrowDown" || e.key === "ArrowLeft") {
-    e.preventDefault();
-    setVolume(parseFloat(volSlider.value) - STEP);
-  }
 });
 
 function setVolume(val) {
@@ -80,7 +67,6 @@ function connect() {
 }
 
 function setConnected(connected) {
-  dot.classList.toggle("connected", connected);
   status.textContent = connected ? "Connected" : "Not connected";
   status.classList.toggle("connected", connected);
 }

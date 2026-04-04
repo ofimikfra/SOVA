@@ -167,6 +167,7 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
 def set_interval(seconds: float):
     global INTERVAL, _next_flush_time
     INTERVAL = seconds
+    _next_flush_time = time.time() + INTERVAL  # reset countdown immediately
     print(f"[PROCESSOR] Flush interval set to {seconds}s")
 
 

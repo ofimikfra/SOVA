@@ -13,7 +13,7 @@ DEFAULTS = {
     "ollama_model":   "llama3.2:3b",
     "flush_interval": 30,
     "tts_enabled":    True,
-    "tts_volume":     0.25,      # 0.0–1.0
+    "tts_volume":     0.5,      # 0.0–1.0
 }
 
 
