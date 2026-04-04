@@ -93,6 +93,7 @@ function _readShortcuts() {
     "Press H to open the help menu. " +
     "Use tab and shift+tab to navigate the dashboard. " +
     "Use the up and down arrows to adjust sliders when focused on them. " +
+    "If you have the Chrome extension installed, use Alt+S to open the extension. " +
     "Press Escape to close."
   );
 }

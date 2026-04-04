@@ -33,7 +33,7 @@
         <div class="guide-step">
           <div class="guide-step-number" aria-hidden="true">1</div>
           <div class="guide-step-body">
-            <strong>Join a Google Meet call</strong>
+            <strong>Join a video call</strong>
           </div>
         </div>
 
@@ -95,8 +95,11 @@
       </div>
 
       <p class="modal-tip">
-        💡 Use <kbd>Tab</kbd> and <kbd>Shift+Tab</kbd> to move between sections and options.
+        💡 Use <kbd>Tab</kbd> and <kbd>Shift</kbd>+<kbd>Tab</kbd> to move between sections and options.
         Sliders respond to <kbd>↑</kbd> <kbd>↓</kbd> arrow keys.
+      </p>
+      <p class="modal-tip">
+        💡 If you have the Chrome extension installed, use <kbd>Alt</kbd>+<kbd>S</kbd> to open the extension.
       </p>
 
     </div>
@@ -135,7 +138,7 @@
 
     <section class="card" aria-labelledby="desc-heading" id="section-description">
       <div class="card-title" id="desc-heading">
-        Latest Description <span class="card-shortcut" aria-hidden="true">D</span>
+        <span class="card-shortcut" aria-hidden="true">D</span>Latest Description
       </div>
       <p id="description-text" class="placeholder" tabindex="0"
          aria-label="Latest SOVA description: Waiting for SOVA">
@@ -154,7 +157,7 @@
 
     <section class="card" aria-labelledby="feed-heading" id="section-feed">
       <div class="card-title" id="feed-heading">
-        Description Feed <span class="card-shortcut" aria-hidden="true">F</span>
+        <span class="card-shortcut" aria-hidden="true">F</span>Description Feed
       </div>
       <ol id="feed" tabindex="0" aria-label="History of SOVA descriptions"
           aria-live="polite" aria-relevant="additions"></ol>
@@ -162,14 +165,14 @@
 
     <section class="card" aria-labelledby="settings-heading" id="section-settings">
       <div class="card-title" id="settings-heading">
-        Settings <span class="card-shortcut" aria-hidden="true">G</span>
+        <span class="card-shortcut" aria-hidden="true">G</span>Settings
       </div>
       <div class="settings-grid">
 
         <div class="setting-row">
           <div class="setting-label" id="lbl-tts-toggle">
             <strong>Audio Feedback</strong>
-            <span>Speak descriptions aloud. Press T to toggle</span>
+            <span>Speak descriptions aloud.</span>
           </div>
           <label class="toggle" aria-labelledby="lbl-tts-toggle">
             <input type="checkbox" id="tts-toggle" checked tabindex="0">
@@ -180,7 +183,7 @@
         <div class="setting-row">
           <div class="setting-label" id="lbl-tts-volume">
             <strong>Feedback Volume</strong>
-            <span>Use + / − keys</span>
+            <span>Use + / - keys</span>
           </div>
           <div class="range-row">
             <input type="range" id="tts-volume" min="0" max="1" step="0.05" value="0.5"
@@ -199,9 +202,9 @@
             <span>How often SOVA analyses, in seconds</span>
           </div>
           <div class="range-row">
-            <input type="range" id="flush-interval" min="3" max="30" step="1" value="30"
+            <input type="range" id="flush-interval" min="15" max="120" step="5" value="30"
                    aria-labelledby="lbl-flush-interval" tabindex="0"
-                   aria-valuemin="3" aria-valuemax="30" aria-valuenow="30"
+                   aria-valuemin="15" aria-valuemax="120" aria-valuenow="30"
                    aria-valuetext="30 seconds">
             <span class="range-value" id="interval-display"
                   aria-live="polite" aria-atomic="true">30s</span>
