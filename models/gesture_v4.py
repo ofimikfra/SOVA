@@ -198,7 +198,7 @@ def _classify_hand(hand_landmarks, hand_id: int):
 
 # ── API ───────────────────────────────────────────────────────────────────────
 
-CONFIDENCE_THRESHOLD = 0.88
+CONFIDENCE_THRESHOLD = 0.85
 
 
 def detectGesture(frame):
@@ -209,6 +209,12 @@ def detectGesture(frame):
 
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = _hands.process(rgb)
+
+    #clean up hand position history
+    active_ids = set(range(len(results.multi_hand_landmarks)))
+    for old_id in list(_hand_position_history.keys()):
+        if old_id not in active_ids:
+            del _hand_position_history[old_id]
 
     if not results.multi_hand_landmarks:
         return "No Gesture", 1.0
