@@ -183,7 +183,7 @@ _GESTURE_SUFFIX = {
 }
 
 _ACTION_SUFFIX = {
-    "Leaving Frame": "They may be stepping away.",
+    "Person Present": "",
     "Looking Away":  "They seem distracted.",
 }
 
@@ -200,6 +200,9 @@ def _template_fallback(expression: str, gesture: str,
         (expression, sentiment),
         "the person's state is unclear."
     )
+
+    if action == "No Person In Frame":
+        return "There is no one in the frame."
 
     suffix = ""
     if gesture in _GESTURE_SUFFIX:
