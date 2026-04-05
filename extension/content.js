@@ -119,7 +119,7 @@ function createOverlay() {
   overlayEl.id = "sova-overlay";
   Object.assign(overlayEl.style, {
     position:      "fixed",
-    top:        "80px",
+    bottom:        "80px",
     left:         "16px",
     zIndex:        "99999",
     background:    "rgba(0,0,0,0.72)",
@@ -156,10 +156,6 @@ function updateOverlay({ status, expression, gesture, action, sentiment, descrip
 
   overlayEl.style.opacity = "1";
   overlayEl.innerHTML = [
-    `😐 <b>${expression ?? "—"}</b>`,
-    `🤚 ${gesture  ?? "—"}`,
-    `🧍 ${action   ?? "—"}`,
-    sentiment    ? `💬 ${sentiment}`    : "",
     description  ? `<hr style="border-color:rgba(255,255,255,0.2);margin:6px 0">📝 <i>${description}</i>` : "",
   ]
     .filter(Boolean)

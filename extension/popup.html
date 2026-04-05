@@ -14,6 +14,25 @@
     <span id="status" class="status" role="status" aria-live="polite">Not connected</span>
   </div>
 
+  <!-- ── Live cues ── -->
+  <div id="cues" class="cues" aria-label="Live non-verbal cues" aria-live="polite">
+    <span class="cue" id="cue-expression" title="Expression">😐 —</span>
+    <span class="cue-divider" aria-hidden="true">·</span>
+    <span class="cue" id="cue-gesture"    title="Gesture">🤚 —</span>
+    <span class="cue-divider" aria-hidden="true">·</span>
+    <span class="cue" id="cue-action"     title="Body action">🧍 —</span>
+  </div>
+ 
+  <!-- ── Sentiment badge ── -->
+  <div id="sentiment-row" class="sentiment-row" aria-live="polite">
+    <span id="sentiment-badge" class="sentiment-badge" data-sentiment="neutral">neutral</span>
+    <div class="conf-track">
+      <div class="conf-fill" id="conf-fill"></div>
+    </div>
+    <span id="conf-pct" class="conf-pct">—</span>
+  </div>
+ 
+  <!-- ── Latest description ── -->
   <div id="latest"
        class="latest"
        aria-label="Latest description"
@@ -21,18 +40,35 @@
     Waiting for SOVA...
   </div>
 
-  <!-- TTS volume -->
-  <div class="volume-row">
-    <span class="vol-label">🔈</span>
-    <input type="range" id="tts-volume"
-           min="0" max="1" step="0.05" value="0.25"
-           aria-label="TTS volume">
-    <span class="vol-value" id="vol-display">25%</span>
+  <!-- ── Settings ── -->
+  <div class="settings">
+ 
+    <div class="setting-row">
+      <span class="setting-label">Volume</span>
+      <div class="slider-group">
+        <input type="range" id="tts-volume"
+               min="0" max="1" step="0.05" value="0.25"
+               aria-label="TTS volume">
+        <span class="slider-val" id="vol-display">25%</span>
+      </div>
+    </div>
+ 
+    <div class="setting-row">
+      <span class="setting-label">Interval</span>
+      <div class="slider-group">
+        <input type="range" id="flush-interval"
+               min="15" max="120" step="5" value="30"
+               aria-label="Analysis interval in seconds">
+        <span class="slider-val" id="interval-display">30s</span>
+      </div>
+    </div>
+
   </div>
 
-  <button id="open-dash" aria-label="Open SOVA dashboard">
-    Open Dashboard
-  </button>
+  <div class="btn-row">
+    <button id="save-btn" aria-label="Save settings">Save Settings</button>
+  </div>
+  <div id="save-status" class="save-status" aria-live="polite" aria-atomic="true"></div>
 
   <script src="popup.js"></script>
 </body>

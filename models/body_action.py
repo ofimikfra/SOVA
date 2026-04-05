@@ -30,9 +30,9 @@ def detectBodyAction(frame) -> tuple:
     lm      = results.pose_landmarks
 
     if lm is None:
-        return "No Person In Frame"
+        return "No Person In Frame", 1.0
 
     if _detect_looking_away(lm):
         return "Looking Away", 0.80
     
-    return "Person present"
+    return "Person present", 1.0

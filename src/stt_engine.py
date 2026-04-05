@@ -45,9 +45,8 @@ def _load_model():
 
 # ── Worker ─────────────────────────────────────────────────────────────────────
 
-# AFTER
 def _transcribe_worker(audio_queue: queue.Queue):
-    from src.tts_engine import is_tts_active   # import here to avoid circular import
+    from src.tts_engine import is_tts_active
 
     model = _load_model()
     print("[TRANSCRIPTION] Worker started.")
@@ -58,10 +57,7 @@ def _transcribe_worker(audio_queue: queue.Queue):
         except queue.Empty:
             continue
 
-        # TTS is playing — discard this chunk and keep draining the queue
-        # until TTS finishes so we don't transcribe our own voice output
         if is_tts_active():
-            print("[TRANSCRIPTION] TTS active — discarding audio chunk.")
             while is_tts_active():
                 try:
                     audio_queue.get_nowait()   # drain chunks that piled up during TTS

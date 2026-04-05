@@ -13,16 +13,16 @@ from models.gesture_v4 import detectGesture
 from models.body_action import detectBodyAction
 from src.processor import processExpression, processGesture, processBodyAction, flushAll
 from src.tts_engine import speak
-import src.audio_capture        as _audio
+import src.audio_capture as _audio
 import src.stt_engine as _stt
-
 from src import config as _config
 import src.processor as _processor
 import src.tts_engine as _tts
 from src.translator import translate, is_rtl
+from models.ollama import ensure_ollama
+from src import description_engine as _desc
 
 _current_config = _config.load()
-
 
 def _apply_settings(partial: dict):
     global _current_config
@@ -110,19 +110,19 @@ def _start_ws_thread():
 
 def run_system(callback=None, source="screen", headless=False,
                stop_event=None, ws_broadcast=None):
-    # ws_broadcast: callable provided by app.py when running as desktop app.
-    # When None we start our own WS server (standalone / CLI mode).
 
-    # ── Load config fresh at engine start ─────
-    # This ensures any settings saved while the engine was stopped
-    # (via pywebview api or WS) are picked up before the loop runs.
-    cfg = _config.load()
-    _processor.set_interval(float(cfg.get("flush_interval", 30)))
-    _tts.set_enabled(cfg.get("tts_enabled", True))
-    _tts.set_volume(cfg.get("tts_volume", 0.25))
-    print(f"[SOVA] Loaded config: interval={cfg.get('flush_interval')}s  "
-          f"tts={'on' if cfg.get('tts_enabled') else 'off'}  "
-          f"model={cfg.get('ollama_model')}")
+    # ── Config ────────────────────────────────────
+    global _current_config
+    _current_config = _config.load()
+
+    # ── Ollama startup ────────────────────────────
+    from models.ollama import ensure_ollama
+    from src import description_engine as _desc
+    model = _current_config.get("ollama_model", "llama3.2:3b")
+    ready = ensure_ollama(model)
+    _desc._ollama_ready = ready
+    if not ready:
+        print("[SOVA] ⚠️  Ollama unavailable — descriptions will use templates.") 
 
     # ── WebSocket ─────────────────────────────────────────
     if ws_broadcast is None:
@@ -158,6 +158,8 @@ def run_system(callback=None, source="screen", headless=False,
     description  = ""
 
     accumulated_transcripts: list[str] = []
+
+    _processor.reset_timer()
 
     print("[SOVA] Engine Active. Press 'q' on the video window to stop.")
 

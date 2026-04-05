@@ -19,10 +19,8 @@ def _confidence_tier(conf: float) -> str:
 _SYSTEM = (
     "You are describing a person's state during a video call. "
     "Write exactly ONE short, human-like, casual sentence, maximum 10 words. "
-    "Don't make the sentence complicated or dramatic."
     "Use simple language."
     "Never use first-person ('I', 'I'm', 'I think', 'I can't'). "
-    # "Never say 'but', 'however', 'although', 'though', 'genuinely', 'clearly', 'obviously'. "
     "Never trail off or explain your uncertainty. "
     "Never contradict yourself in the same sentence. "
     "End cleanly with a single period. "
@@ -90,8 +88,7 @@ def _build_prompt(expression: str, gesture: str, action: str,
         f"{conf_instruction}\n\n"
         f"Observed signals:\n"
         + "\n".join(lines)
-        + "\n\nWrite one sentence only. No 'but', no 'I', no trailing thoughts.\n"
-        + "Description:"
+        + " Description:"
     )
 
 
@@ -103,8 +100,14 @@ _BAD_PHRASES = (
     "but it", "but their", "but the", "however", "although", "despite", "levels", "level",
 )
 
+_ollama_ready: bool = False
+
 def _call_ollama(prompt: str) -> str | None:
+    if not _ollama_ready:
+        return None
+
     model = _cfg.load().get("ollama_model", "llama3.2:3b")
+
     try:
         resp = requests.post(
             OLLAMA_URL,
@@ -226,6 +229,14 @@ def _template_fallback(expression: str, gesture: str,
 def summarize(expression: str, gesture: str, action: str,
               nlp_label: str | None, nlp_conf: float | None,
               overall_conf: float) -> str:
+
+    # ── Short-circuit: no person in frame ─────────────────────────────────────
+    if action == "No Person In Frame":
+        tier = _confidence_tier(overall_conf)
+        if tier == "low" or tier == "medium":
+            return "It seems like there's no one in the frame."
+        return "There is no one in the frame."
+
     prompt = _build_prompt(expression, gesture, action,
                            nlp_label, nlp_conf, overall_conf)
     result = _call_ollama(prompt)

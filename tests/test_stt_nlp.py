@@ -11,8 +11,8 @@ Two modes:
                   no audio hardware needed. Run with --replay.
 
 Usage:
-    python tests/test_transcript_nlp.py           # live
-    python tests/test_transcript_nlp.py --replay  # offline
+    python tests/test_stt_nlp.py           # live
+    python tests/test_stt_nlp.py --replay  # offline
 """
 
 import sys
@@ -24,7 +24,7 @@ import argparse
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
 from models.nlp_engine import analyze as nlp_analyze
-import src.audio_capture        as audio
+import src.audio_capture as audio
 import src.stt_engine as stt
 
 

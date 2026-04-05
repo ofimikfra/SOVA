@@ -166,6 +166,11 @@ def set_interval(seconds: float):
     _next_flush_time = time.time() + INTERVAL  # reset countdown immediately
     print(f"[PROCESSOR] Flush interval set to {seconds}s")
 
+def reset_timer():
+    """Reset the flush countdown — call after slow startup tasks."""
+    global _next_flush_time
+    _next_flush_time = time.time() + INTERVAL
+
 
 # ── Internal ───────────────────────────────────────────────────────────────────
 
