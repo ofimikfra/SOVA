@@ -16,32 +16,40 @@ def _confidence_tier(conf: float) -> str:
 
 # ── System prompt ─────────────────────────────────────────────────────────────
 
+# AFTER
 _SYSTEM = (
-    "You are describing a person's state during a video call. "
-    "Write exactly ONE short, human-like, casual sentence, maximum 10 words. "
-    "Use simple language."
+    "You are objectively describing a person's visible behaviour during a video call. "
+    "Write exactly ONE short, factual sentence, maximum 10 words. "
+    "Describe only what is directly observed — expression, gesture, and body language. "
+    "Use speech sentiment only to add light tone context, never to override what is visible. "
+    "Describe behaviour and engagement, not physical anatomy. "   # ← add this
+    "Do not describe facial features literally — interpret them in context. " # ← add this
+    "If the person's mouth is open and there's speech sentiment, assume the person is talking."
+    "Never assume emotions, intentions, or inner states. "
+    "Never mention sarcasm, mixed feelings, or contradictions. "
     "Never use first-person ('I', 'I'm', 'I think', 'I can't'). "
-    "Never trail off or explain your uncertainty. "
-    "Never contradict yourself in the same sentence. "
+    "Never trail off or explain uncertainty. "
     "End cleanly with a single period. "
     "Use only third-person: 'The person', 'They', 'Their'."
 )
 
 _CONFIDENCE_INSTRUCTION = {
     "low": (
-        "You MUST use uncertain words: "
-        "'seems', 'appears', 'might be', 'looks like'. "
-        "NEVER use certain words like 'is', 'looks happy', 'clearly', 'genuinely'. "
-        "DO NOT say that the confidence level is low."
+        "Describe only what is visible using cautious language: "
+        "'appears to be', 'looks like they are'. "
+        "NEVER infer emotions or motivations. "
+        "NEVER use 'is' as a certainty. "
+        "DO NOT mention confidence levels."
     ),
     "medium": (
-        "Use hedged language only: "
-        "'appears to be', 'seems to be', 'looks like they'. "
-        "NEVER use 'is' as a certainty. "
-        "DO NOT say that the confidence level is low."
+        "Describe what is visible using mild hedging: "
+        "'appears to be', 'seems to be'. "
+        "NEVER infer emotions beyond what the expression directly shows. "
+        "DO NOT mention confidence levels."
     ),
     "high": (
-        "Be direct, no hedging words. "
+        "Describe what is visible directly and factually. "
+        "Stick to observable behaviour only."
     ),
 }
 
@@ -60,26 +68,14 @@ def _build_prompt(expression: str, gesture: str, action: str,
 
     # Only include speech if captions were actually present
     speech_line   = ""
-    conflict_line = ""
     if nlp_label is not None:
         speech_line = f"Speech sentiment: {nlp_label} ({nlp_conf:.0%} confidence)"
-
-        conflict = (
-            (expression == "Smiling"  and nlp_label == "negative") or
-            (expression == "Frowning" and nlp_label == "positive")
-        )
-        if conflict:
-            conflict_line = (
-                "Note: expression and speech conflict — "
-                "consider sarcasm or mixed feelings."
-            )
 
     lines = filter(None, [
         f"Expression: {expression}",
         gesture_line,
         action_line,
         speech_line,
-        conflict_line,
         f"Confidence: {overall_conf:.0%}",
     ])
 

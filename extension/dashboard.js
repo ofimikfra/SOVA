@@ -280,6 +280,8 @@ function setStatus(s) {
 
 // ── Engine state ──────────────────────────────
 
+let _engineStateInitialised = false;
+
 function setEngineState(running) {
   if (_lastEngineRunning === running) return;
   _lastEngineRunning = running;
@@ -292,9 +294,19 @@ function setEngineState(running) {
   }
 
   setStatus(running ? "connected" : "disconnected");
-  _narrate(running ? "SOVA is connected." : "SOVA is disconnected.");
+
+  if (!_engineStateInitialised) {
+    _engineStateInitialised = true;
+    return;
+  }
+
+  clearTimeout(_engineNarrateTimer);
+  _engineNarrateTimer = setTimeout(() => {
+    _narrate(running ? "SOVA is connected." : "SOVA is disconnected.");
+  }, 150);
 }
 
+setTimeout(_runWelcomeTour, 1200);
 
 // ── Result handler ────────────────────────────
 

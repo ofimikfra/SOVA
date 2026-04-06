@@ -4,7 +4,6 @@ let socket = null;
 // ── DOM refs ──────────────────────────────────
 const statusEl       = document.getElementById("status");
 const latest         = document.getElementById("latest");
-const openDash       = document.getElementById("open-dash");
 const saveBtn        = document.getElementById("save-btn");
 const saveStatus     = document.getElementById("save-status");
 const volSlider      = document.getElementById("tts-volume");
@@ -17,13 +16,6 @@ const cueAction      = document.getElementById("cue-action");
 const sentimentBadge = document.getElementById("sentiment-badge");
 const confFill       = document.getElementById("conf-fill");
 const confPct        = document.getElementById("conf-pct");
-
-
-// ── Open dashboard ────────────────────────────
-
-openDash.addEventListener("click", () => {
-  chrome.runtime.sendMessage({ type: "open_dashboard" });
-});
 
 
 // ── Sliders ───────────────────────────────────
