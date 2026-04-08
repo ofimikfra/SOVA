@@ -123,10 +123,8 @@ def _classify_hand(hand_landmarks, hand_id: int) -> tuple:
     # Peace Sign
     if index_ext and middle_ext and not ring_ext and not pinky_ext:
         spread = _finger_dist(index_tip, middle_tip)
-        if spread > 0.10:
-            if _finger_dist(index_tip, index_mcp) > 0.13 and \
-               _finger_dist(middle_tip, middle_mcp) > 0.13:
-                return "Peace Sign", 0.94
+        if spread > 0.08:
+            return "Peace Sign", 0.94
 
     # OK Sign
     if _finger_dist(thumb_tip, index_tip) < 0.04 and middle_ext and ring_ext:

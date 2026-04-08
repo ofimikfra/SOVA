@@ -22,8 +22,8 @@ _SYSTEM = (
     "Write exactly ONE short, factual sentence, maximum 10 words. "
     "Describe only what is directly observed — expression, gesture, and body language. "
     "Use speech sentiment only to add light tone context, never to override what is visible. "
-    "Describe behaviour and engagement, not physical anatomy. "   # ← add this
-    "Do not describe facial features literally — interpret them in context. " # ← add this
+    "Describe the gesture the person is doing if there are any. "
+    "Do not describe facial features literally — interpret them in context. " 
     "If the person's mouth is open and there's speech sentiment, assume the person is talking."
     "Never assume emotions, intentions, or inner states. "
     "Never mention sarcasm, mixed feelings, or contradictions. "
