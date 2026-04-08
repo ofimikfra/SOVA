@@ -65,7 +65,7 @@ def _fuse_sentiment(expression: str, nlp_label: str, nlp_conf: float) -> tuple[s
 # ── Internal Logic ─────────────────────────────────────────────────────
 
 def _getDominant(buffer: list, neutral: str,
-                 label: str = "",
+                 lbl: str = "",
                  priorities: dict | None = None,
                  neutral_threshold: float = 0.60) -> str: # Added threshold param
     if not buffer:
@@ -93,6 +93,14 @@ def _getDominant(buffer: list, neutral: str,
     non_neutral = {k: v for k, v in weighted.items() if k != neutral}
     if not non_neutral:
         return neutral
+    
+    print(max(non_neutral))
+    print(neutral_count)
+    print(total_items)
+    print(neutral_threshold)
+    print(neutral_count/total_items)
+    print((neutral_count / total_items) >= neutral_threshold)
+    print()
 
     return max(non_neutral, key=non_neutral.get)
 
@@ -119,21 +127,21 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     expression = _getDominant(
         _expr_buffer,  
         neutral="Neutral",    
-        label="EXPRESSION",
+        lbl="EXPRESSION",
         neutral_threshold=0.60 # default threshold
     )
 
     gesture = _getDominant(
         _gest_buffer,  
         neutral="No Gesture",    
-        label="GESTURE",
-        neutral_threshold=0.15  # more sensitive threshold
+        lbl="GESTURE",
+        neutral_threshold=0.95  # more sensitive threshold
     )
 
     action = _getDominant(
         _action_buffer, 
         neutral="No Person In Frame", 
-        label="ACTION",
+        lbl="ACTION",
         neutral_threshold=0.70 # stricter threshold
     )
 
