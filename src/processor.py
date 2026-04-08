@@ -66,9 +66,9 @@ def _fuse_sentiment(expression: str, nlp_label: str, nlp_conf: float) -> tuple[s
 
 def _getDominant(buffer: list, neutral: str,
                  label: str = "",
-                 priorities: dict | None = None) -> str:
+                 priorities: dict | None = None,
+                 neutral_threshold: float = 0.60) -> str: # Added threshold param
     if not buffer:
-        print(f"  [{label}] Buffer empty → {neutral}")
         return neutral
 
     scores = defaultdict(float)
@@ -79,25 +79,21 @@ def _getDominant(buffer: list, neutral: str,
         scores[lbl] += conf
         counts[lbl] += 1
 
-    # If Neutral is dominant enough, return it immediately
+    # Use the specific threshold passed for this category
     neutral_count = counts.get(neutral, 0)
-    if (neutral_count / total_items) >= 0.60:
+    if (neutral_count / total_items) >= neutral_threshold:
         return neutral
 
-    # If Neutral < 60%, find the winner among others
-    # Apply priority multipliers to all scores
+    # Otherwise, find the strongest non-neutral signal
     weighted = {
         lbl: score * priorities.get(lbl, 1)
         for lbl, score in scores.items()
     } if priorities else scores
 
-    # Filter out neutral so it can't win via score if it failed the 60% count gate
     non_neutral = {k: v for k, v in weighted.items() if k != neutral}
-
     if not non_neutral:
         return neutral
 
-    # Return the label with the highest weighted confidence score
     return max(non_neutral, key=non_neutral.get)
 
 # ── Public API ─────────────────────────────────────────────────────────────────
@@ -121,22 +117,24 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
     avg_expr_conf = sum(expr_confs) / len(expr_confs)
 
     expression = _getDominant(
-        _expr_buffer,
-        neutral="Neutral",
+        _expr_buffer,  
+        neutral="Neutral",    
         label="EXPRESSION",
-        priorities=_EXPR_PRIORITY,
+        neutral_threshold=0.60 # default threshold
     )
 
     gesture = _getDominant(
         _gest_buffer,  
         neutral="No Gesture",    
-        label="GESTURE"
+        label="GESTURE",
+        neutral_threshold=0.15  # more sensitive threshold
     )
 
-    action  = _getDominant(
+    action = _getDominant(
         _action_buffer, 
         neutral="No Person In Frame", 
-        label="ACTION"
+        label="ACTION",
+        neutral_threshold=0.70 # stricter threshold
     )
 
     _expr_buffer.clear()
