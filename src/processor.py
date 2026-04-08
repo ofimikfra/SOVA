@@ -62,7 +62,7 @@ def _fuse_sentiment(expression: str, nlp_label: str, nlp_conf: float) -> tuple[s
 
     return label, conf
 
-# ── Internal Logic (FIXED) ─────────────────────────────────────────────────────
+# ── Internal Logic ─────────────────────────────────────────────────────
 
 def _getDominant(buffer: list, neutral: str,
                  label: str = "",
@@ -79,34 +79,26 @@ def _getDominant(buffer: list, neutral: str,
         scores[lbl] += conf
         counts[lbl] += 1
 
-    # Apply priority multipliers if provided
+    # If Neutral is dominant enough, return it immediately
+    neutral_count = counts.get(neutral, 0)
+    if (neutral_count / total_items) >= 0.60:
+        return neutral
+
+    # If Neutral < 60%, find the winner among others
+    # Apply priority multipliers to all scores
     weighted = {
         lbl: score * priorities.get(lbl, 1)
         for lbl, score in scores.items()
     } if priorities else scores
 
+    # Filter out neutral so it can't win via score if it failed the 60% count gate
     non_neutral = {k: v for k, v in weighted.items() if k != neutral}
-    
-    neutral_count = counts.get(neutral, 0)
-    neutral_percent = neutral_count / total_items
 
-    # If Neutral is NOT at least 60% of the data, force a non-neutral selection
-    if neutral_percent < 0.60 and non_neutral:
-        return max(non_neutral, key=non_neutral.get)
+    if not non_neutral:
+        return neutral
 
-    # Otherwise, proceed with normal logic (Neutral is dominant or buffer only has Neutral)
-    if non_neutral:
-        top           = max(non_neutral, key=non_neutral.get)
-        top_score     = non_neutral[top]
-        neutral_score = weighted.get(neutral, 0.0)
-
-        if neutral_score >= top_score:
-            # Override neutral if a non-neutral gesture is extremely strong (score >= 3.0)
-            if top_score >= 3.0:
-                return top
-            return neutral
-
-    return max(weighted, key=weighted.get)
+    # Return the label with the highest weighted confidence score
+    return max(non_neutral, key=non_neutral.get)
 
 # ── Public API ─────────────────────────────────────────────────────────────────
 
@@ -134,8 +126,18 @@ def flushAll(captions: list[str] | None = None) -> tuple | None:
         label="EXPRESSION",
         priorities=_EXPR_PRIORITY,
     )
-    gesture = _getDominant(_gest_buffer, neutral="No Gesture", label="GESTURE")
-    action  = _getDominant(_action_buffer, neutral="No Person In Frame", label="ACTION")
+
+    gesture = _getDominant(
+        _gest_buffer,  
+        neutral="No Gesture",    
+        label="GESTURE"
+    )
+
+    action  = _getDominant(
+        _action_buffer, 
+        neutral="No Person In Frame", 
+        label="ACTION"
+    )
 
     _expr_buffer.clear()
     _gest_buffer.clear()
