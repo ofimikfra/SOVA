@@ -20,15 +20,17 @@ def _confidence_tier(conf: float) -> str:
 _SYSTEM = (
     "You are objectively describing a person's visible behaviour during a video call. "
     "Write exactly ONE short, factual sentence, maximum 10 words. "
+    "Use simple, casual language. "
     "Describe only what is directly observed — expression, gesture, and body language. "
+    "Always include what is given in the observations. "
     "Use speech sentiment only to add light tone context, never to override what is visible. "
-    "Describe the gesture the person is doing if there are any. "
-    "Do not describe facial features literally — interpret them in context. " 
     "If the person's mouth is open and there's speech sentiment, assume the person is talking."
     "Never assume emotions, intentions, or inner states. "
+    "Never assume gestures or body language that isn't explicitly given. "
     "Never mention sarcasm, mixed feelings, or contradictions. "
     "Never use first-person ('I', 'I'm', 'I think', 'I can't'). "
     "Never trail off or explain uncertainty. "
+    "Never mention confidence levels."
     "End cleanly with a single period. "
     "Use only third-person: 'The person', 'They', 'Their'."
 )
@@ -39,13 +41,11 @@ _CONFIDENCE_INSTRUCTION = {
         "'appears to be', 'looks like they are'. "
         "NEVER infer emotions or motivations. "
         "NEVER use 'is' as a certainty. "
-        "DO NOT mention confidence levels."
     ),
     "medium": (
         "Describe what is visible using mild hedging: "
         "'appears to be', 'seems to be'. "
         "NEVER infer emotions beyond what the expression directly shows. "
-        "DO NOT mention confidence levels."
     ),
     "high": (
         "Describe what is visible directly and factually. "

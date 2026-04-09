@@ -93,14 +93,6 @@ def _getDominant(buffer: list, neutral: str,
     non_neutral = {k: v for k, v in weighted.items() if k != neutral}
     if not non_neutral:
         return neutral
-    
-    print(max(non_neutral))
-    print(neutral_count)
-    print(total_items)
-    print(neutral_threshold)
-    print(neutral_count/total_items)
-    print((neutral_count / total_items) >= neutral_threshold)
-    print()
 
     return max(non_neutral, key=non_neutral.get)
 
