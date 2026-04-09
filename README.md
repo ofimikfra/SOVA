@@ -88,12 +88,12 @@ SOVA was developed by team **Luminara**
 
 | Name              | Role                                   | GitHub                                               |
 | ----------------- | -------------------------------------- | ---------------------------------------------------- |
-| Aagna Samhita     | Team Leader / Computer Vision Engineer | [@eggwtv](https://github.com/eggwtv)                 |
+| Aagna Samhita     | Team Leader / ML Developer             | [@eggwtv](https://github.com/eggwtv)                 |
 | Samia Khan        | Scribe / Frontend Developer            | [@skellereve-ops](https://github.com/skellereve-ops) |
 | Sofia Francisco   | Lead Developer / Integration Engineer  | [@ofimikfra](https://github.com/ofimikfra)           |
-| Anelle Khare      | Computer Vision Engineer               | [@Ak200523](https://github.com/Ak200523)             |
-| Sandra Jose       | Audio & NLP Engineer                   | [@sandrasuzanne](https://github.com/sandrasuzanne)   |
-| Sanura Castellino | Frontend / Backend Developer           | [@sanuraaa](https://github.com/sanuraaa)             |
+| Anelle Khare      | Dataset Collection & Preprocessing     | [@Ak200523](https://github.com/Ak200523)             |
+| Sandra Jose       | UX & Prototype Enhancement             | [@sandrasuzanne](https://github.com/sandrasuzanne)   |
+| Sanura Castellino | Testing & QA                           | [@sanuraaa](https://github.com/sanuraaa)             |
 | Sara Hayel        | Backend Developer                      | [@SaraHayel](https://github.com/SaraHayel)           |
 
 ## Acknowledgements
