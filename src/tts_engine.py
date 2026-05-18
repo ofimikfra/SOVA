@@ -30,25 +30,6 @@ def is_tts_active() -> bool:
     capture and prevent TTS from feeding back into the sentiment pipeline."""
     return _tts_active
 
-
-# ── Chime ──────────────────────────────────────────────────────────────────────
-
-def _play_chime():
-    """Short notification sound when a new description arrives."""
-    try:
-        if sys.platform == "darwin":
-            subprocess.Popen(
-                ["afplay", "-v", str(round(_tts_volume * 0.6, 2)),
-                 "/System/Library/Sounds/Tink.aiff"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-        else:
-            print("\a", end="", flush=True)
-    except Exception:
-        pass
-
-
 # ── Playback ───────────────────────────────────────────────────────────────────
 
 def _play(text: str, tts_lang: str = "en-US"):
@@ -182,7 +163,6 @@ def speak(text: str, locale: str = "en"):
     tts_lang = get_tts_lang(locale)
     if not _tts_enabled or not text:
         return
-    threading.Thread(target=_play_chime, daemon=True).start()
     while not _queue.empty():
         try:
             _queue.get_nowait()

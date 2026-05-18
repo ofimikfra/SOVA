@@ -10,6 +10,24 @@ settings saves.
 """
 
 from transformers import pipeline
+import re
+
+_NEUTRAL_RE = re.compile(
+    r"\b(yeah|yes|yep|sure|okay|ok|alright|uh+|um+|hmm+|"
+    r"i (think|mean|guess|see|know)|you know|let me|let's|"
+    r"so|anyway|moving on|next|first|second|also|"
+    r"the (meeting|call|slide|screen|document)|"
+    r"looking at|going over|talking about|one moment|just a sec)\b",
+    re.IGNORECASE
+)
+
+_FALSE_NEGATIVE_RE = re.compile(
+    r"\b(not bad|not wrong|no problem|no issue|don't worry|"
+    r"can('t| not) (find|see|hear|get|open|share|access)|"
+    r"(issue|problem|bug|error|fix|concern|difficult|hard|wrong|"
+    r"fail|broken|doesn't|isn't|aren't|won't|can't|don't|not)\b",
+    re.IGNORECASE
+)
 
 _classifier = None  # loaded on first use, not at import time
 
@@ -42,13 +60,31 @@ def analyze(audio: list[str]) -> tuple[str, float]:
     if not text:
         print("[NLP] No audio detected.")
         return "Neutral", 1.0
+    
+    # If >30% of words match meeting/conversational filler, neutral 
+    words = text.split()
+    density = len(_NEUTRAL_RE.findall(text)) / max(len(words), 1)
+    if density >= 0.30:
+        return "neutral", round(min(0.70 + density * 0.20, 0.95), 3)
 
-    result = _get_classifier()(text)[0]
-
-    label = result["label"].lower()   # → 'positive' or 'negative'
+    result = _get_classifier(text)[0]
+    label = result["label"].lower()
     conf  = round(result["score"], 3)
 
-    if conf < 0.65:
+    # SST-2 false-negative override:
+    # Work/meeting speech is full of negation words and task nouns that the
+    # model was never trained to distinguish from genuinely negative sentiment.
+    # If the negative label relies heavily on these words, downgrade to neutral.
+    if label == "negative":
+        words = text.split()
+        neg_trigger_count = len(_FALSE_NEGATIVE_RE.findall(text))
+        neg_density = neg_trigger_count / max(len(words), 1)
+        
+        # High density of work-context "negative-looking" words = likely neutral
+        if neg_density >= 0.15 or conf < 0.88:
+            return "neutral", round(1.0 - conf, 3)
+
+    if conf < 0.82:
         return "neutral", round(1.0 - conf, 3)
 
     return label, conf

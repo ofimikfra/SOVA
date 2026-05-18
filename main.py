@@ -110,6 +110,10 @@ def _start_ws_thread():
 
 def run_system(callback=None, source="screen", headless=False,
                stop_event=None, ws_broadcast=None):
+    
+    _processor.reset_timer()
+    _audio.stop()
+    _stt.stop()
 
     # ── Config ────────────────────────────────────
     global _current_config

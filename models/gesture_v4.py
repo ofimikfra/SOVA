@@ -30,29 +30,106 @@ except Exception as e:
     print(f"⚠️  YOLO unavailable, phone detection disabled: {e}")
 
 PHONE_CONFIDENCE_THRESHOLD = 0.55  # minimum YOLO confidence to report phone
-
+PHONE_CONFIRM_FRAMES  = 4
+PHONE_RELEASE_FRAMES  = 6
+_phone_consecutive    = 0
+_no_phone_consecutive = 0
+_phone_active         = False
 
 # phone detection
 
-def detectPhone(frame) -> bool:
+def _get_hand_crop(frame, hand_landmarks, padding: float = 0.30):
     """
-    Return True if a phone is detected in frame (BGR numpy array) with
-    sufficient confidence using YOLO. Returns False if YOLO is unavailable.
+    Return a cropped BGR region tightly around a hand landmark cluster,
+    expanded by `padding` percent on each side.
+    Returns None if the crop would be degenerate.
     """
+    h, w = frame.shape[:2]
+    xs = [lm.x * w for lm in hand_landmarks.landmark]
+    ys = [lm.y * h for lm in hand_landmarks.landmark]
+
+    x1, y1 = min(xs), min(ys)
+    x2, y2 = max(xs), max(ys)
+
+    pad_x = (x2 - x1) * padding
+    pad_y = (y2 - y1) * padding
+
+    x1 = max(0,   int(x1 - pad_x))
+    y1 = max(0,   int(y1 - pad_y))
+    x2 = min(w,   int(x2 + pad_x))
+    y2 = min(h,   int(y2 + pad_y))
+
+    if x2 - x1 < 20 or y2 - y1 < 20:
+        return None
+
+    return frame[y1:y2, x1:x2]
+
+def _phone_aspect_ok(box) -> bool:
+    x1, y1, x2, y2 = box.xyxy[0].tolist()
+    w = max(x2 - x1, 1)
+    h = max(y2 - y1, 1)
+    ratio = w / h
+    return 0.35 < ratio < 2.9
+
+def detectPhone(frame, hand_results=None) -> bool:
+    """
+    Only runs YOLO on the region immediately around each detected hand.
+    No hands visible → no phone detection at all.
+    This prevents on-screen mic icons, desk mics, and background objects
+    from ever triggering a false positive.
+    """
+    global _phone_consecutive, _no_phone_consecutive, _phone_active
+
     if _phone_detector is None:
         return False
 
-    try:
-        results = _phone_detector(frame, verbose=False, conf=PHONE_CONFIDENCE_THRESHOLD)
-        for result in results:
-            for box in result.boxes:
-                # COCO class 67 = cell phone
-                if int(box.cls[0]) == 67 and float(box.conf[0]) >= PHONE_CONFIDENCE_THRESHOLD:
-                    return True
-    except Exception:
-        pass
+    # No hands in frame — can't be using a phone
+    if hand_results is None or not hand_results.multi_hand_landmarks:
+        _phone_consecutive     = 0
+        _no_phone_consecutive += 1
+        if _no_phone_consecutive >= PHONE_RELEASE_FRAMES:
+            _phone_active = False
+        return _phone_active
 
-    return False
+    detected_this_frame = False
+
+    for hand_lm in hand_results.multi_hand_landmarks:
+        crop = _get_hand_crop(frame, hand_lm, padding=0.30)
+        if crop is None:
+            continue
+
+        try:
+            results = _phone_detector(crop, verbose=False, conf=PHONE_CONFIDENCE_THRESHOLD)
+            for result in results:
+                for box in result.boxes:
+                    if int(box.cls[0]) != 67:
+                        continue
+                    if float(box.conf[0]) < PHONE_CONFIDENCE_THRESHOLD:
+                        continue
+                    if not _phone_aspect_ok(box):
+                        continue
+                    detected_this_frame = True
+                    break
+                if detected_this_frame:
+                    break
+        except Exception:
+            pass
+
+        if detected_this_frame:
+            break
+
+    if detected_this_frame:
+        _phone_consecutive   += 1
+        _no_phone_consecutive = 0
+        if _phone_consecutive >= PHONE_CONFIRM_FRAMES:
+            _phone_active = True
+    else:
+        _no_phone_consecutive += 1
+        _phone_consecutive     = 0
+        if _no_phone_consecutive >= PHONE_RELEASE_FRAMES:
+            _phone_active = False
+
+    return _phone_active
 
 
 
@@ -147,11 +224,11 @@ CONFIDENCE_THRESHOLD = 0.88
 
 def detectGesture(frame) -> tuple:
 
-    if detectPhone(frame):
-        return "Using Phone", 0.95
-
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
     results = _hands.process(rgb)
+
+    if detectPhone(frame, results):
+        return "Using Phone", 0.95
 
     if not results.multi_hand_landmarks:
         return "No Gesture", 1.0
