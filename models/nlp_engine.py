@@ -22,36 +22,36 @@ _NEUTRAL_RE = re.compile(
 )
 
 _FALSE_NEGATIVE_RE = re.compile(
-    r"\b(not bad|not wrong|no problem|no issue|don't worry|"
-    r"can('t| not) (find|see|hear|get|open|share|access)|"
-    r"(issue|problem|bug|error|fix|concern|difficult|hard|wrong|"
-    r"fail|broken|doesn't|isn't|aren't|won't|can't|don't|not)\b",
+    r"\b("
+    r"not bad|not wrong|no problem|no issue|don't worry|"
+    r"can't (find|see|hear|get|open|share|access)|"
+    r"cannot (find|see|hear|get|open|share|access)|"
+    r"issue|problem|bug|error|fix|concern|difficult|hard|wrong|"
+    r"fail|broken|doesn't|isn't|aren't|won't|can't|don't|not"
+    r")\b",
     re.IGNORECASE
 )
 
-_classifier = None  # loaded on first use, not at import time
+_classifier = None
 
-
-def _get_classifier():
-    global _classifier
-    if _classifier is None:
-        print("[NLP] Loading sentiment model...")
-        _classifier = pipeline(
-            task="sentiment-analysis",
-            model="distilbert-base-uncased-finetuned-sst-2-english",
-            truncation=True,
-            max_length=512,
-        )
-        print("[NLP] Model ready.")
-    return _classifier
+try:
+    print("[NLP] Loading sentiment model...")
+    _classifier = pipeline(
+        task="sentiment-analysis",
+        model="distilbert-base-uncased-finetuned-sst-2-english",
+        truncation=True,
+        max_length=512,
+    )
+    print("[NLP] Model ready.")
+except Exception as e:
+    print(f"[NLP] Failed to load sentiment model: {e}")
+    print("[NLP] Sentiment analysis will default to neutral.")
 
 
 def analyze(audio: list[str]) -> tuple[str, float]:
-    """
-    Takes a list of raw caption strings from the current flush window.
-    Returns (label, confidence) where label is 'positive', 'negative',
-    or 'neutral'.
-    """
+    if _classifier is None:
+        return "neutral", 0.90
+    
     if not audio:
         print("[NLP] No audio detected.")
         return "Neutral", 1.0
@@ -67,7 +67,7 @@ def analyze(audio: list[str]) -> tuple[str, float]:
     if density >= 0.30:
         return "neutral", round(min(0.70 + density * 0.20, 0.95), 3)
 
-    result = _get_classifier(text)[0]
+    result = _classifier(text)[0]
     label = result["label"].lower()
     conf  = round(result["score"], 3)
 
