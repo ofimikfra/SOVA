@@ -3,14 +3,10 @@ SOVA NLP Engine
 Runs sentiment analysis on accumulated caption text using a local
 DistilBERT model (~67 MB). No API key or internet connection required
 after the first download.
-
-The model is loaded lazily on the first real analyze() call — not at
-import time — so importing this module never blocks app startup or
-settings saves.
 """
 
-from transformers import pipeline
 import re
+import threading
 
 _NEUTRAL_RE = re.compile(
     r"\b(yeah|yes|yep|sure|okay|ok|alright|uh+|um+|hmm+|"
@@ -33,22 +29,30 @@ _FALSE_NEGATIVE_RE = re.compile(
 )
 
 _classifier = None
+_model_lock = threading.Lock()
 
-try:
-    print("[NLP] Loading sentiment model...")
-    _classifier = pipeline(
-        task="sentiment-analysis",
-        model="distilbert-base-uncased-finetuned-sst-2-english",
-        truncation=True,
-        max_length=512,
-    )
-    print("[NLP] Model ready.")
-except Exception as e:
-    print(f"[NLP] Failed to load sentiment model: {e}")
-    print("[NLP] Sentiment analysis will default to neutral.")
+def _load_model():
+    global _classifier
+    with _model_lock:
+        if _classifier is not None:
+            return
+        try:
+            print("[NLP] Loading sentiment model...")
+            from transformers import pipeline   # ← moved here, runs only once
+            _classifier = pipeline(
+                task="sentiment-analysis",
+                model="distilbert-base-uncased-finetuned-sst-2-english",
+                truncation=True,
+                max_length=512,
+            )
+            print("[NLP] Model ready.")
+        except Exception as e:
+            print(f"[NLP] ⚠️  Failed to load model: {e}")
 
 
 def analyze(audio: list[str]) -> tuple[str, float]:
+    if _classifier is None:
+        _load_model()
     if _classifier is None:
         return "neutral", 0.90
     

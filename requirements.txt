@@ -5,11 +5,11 @@ numpy
 pyttsx3>=2.90 ; sys_platform != "darwin"
 ultralytics
 websockets>=12.0
-transformers>=4.40.0
+transformers==4.37.2
 torch>=2.2.0  
 requests>=2.31.0
 pystray 
-webview
+pywebview==4.4.1
 faster-whisper
 sounddevice
 numpy

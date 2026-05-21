@@ -11,12 +11,21 @@ from collections import deque
 
 __all__ = ["detectGesture"]
 
-_mp_hands = mp.solutions.hands
-_hands = _mp_hands.Hands(
-    static_image_mode=False,
-    max_num_hands=4,
-    min_detection_confidence=0.75,
-    min_tracking_confidence=0.6
+# Replace with:
+from mediapipe.tasks import python as _mp_python
+from mediapipe.tasks.python import vision as _mp_vision
+
+_hand_landmarker = _mp_vision.HandLandmarker.create_from_options(
+    _mp_vision.HandLandmarkerOptions(
+        base_options=_mp_python.BaseOptions(
+            model_asset_path="models/hand_landmarker.task"
+        ),
+        num_hands=4,
+        min_hand_detection_confidence=0.75,
+        min_hand_presence_confidence=0.75,
+        min_tracking_confidence=0.6,
+        running_mode=mp.tasks.vision.RunningMode.IMAGE,
+    )
 )
 
 _phone_detector = None
@@ -45,8 +54,8 @@ def _get_hand_crop(frame, hand_landmarks, padding: float = 0.30):
     Returns None if the crop would be degenerate.
     """
     h, w = frame.shape[:2]
-    xs = [lm.x * w for lm in hand_landmarks.landmark]
-    ys = [lm.y * h for lm in hand_landmarks.landmark]
+    xs = [lm.x * w for lm in hand_landmarks]
+    ys = [lm.y * h for lm in hand_landmarks]
 
     x1, y1 = min(xs), min(ys)
     x2, y2 = max(xs), max(ys)
@@ -84,7 +93,7 @@ def detectPhone(frame, hand_results=None) -> bool:
         return False
 
     # No hands in frame — can't be using a phone
-    if hand_results is None or not hand_results.multi_hand_landmarks:
+    if hand_results is None or not hand_results.hand_landmarks:
         _phone_consecutive     = 0
         _no_phone_consecutive += 1
         if _no_phone_consecutive >= PHONE_RELEASE_FRAMES:
@@ -93,7 +102,7 @@ def detectPhone(frame, hand_results=None) -> bool:
 
     detected_this_frame = False
 
-    for hand_lm in hand_results.multi_hand_landmarks:
+    for hand_lm in hand_results.hand_landmarks:
         crop = _get_hand_crop(frame, hand_lm, padding=0.30)
         if crop is None:
             continue
@@ -160,7 +169,7 @@ def _detect_wave(hand_id: int) -> bool:
 
 def _classify_hand(hand_landmarks, hand_id: int) -> tuple:
     # Return (gesture_label, confidence) for a single hand
-    lm = hand_landmarks.landmark
+    lm = hand_landmarks
 
     wrist      = lm[0]
     thumb_tip  = lm[4];  thumb_ip  = lm[3];  thumb_mcp = lm[2]
@@ -223,19 +232,19 @@ CONFIDENCE_THRESHOLD = 0.88
 
 
 def detectGesture(frame) -> tuple:
-
     rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = _hands.process(rgb)
+    mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=rgb)
+    results = _hand_landmarker.detect(mp_image)
 
     if detectPhone(frame, results):
         return "Using Phone", 0.95
 
-    if not results.multi_hand_landmarks:
+    if not results.hand_landmarks:
         return "No Gesture", 1.0
 
     best_gesture, best_conf = "No Gesture", 0.0
 
-    for idx, hand_landmarks in enumerate(results.multi_hand_landmarks):
+    for idx, hand_landmarks in enumerate(results.hand_landmarks):
         gesture, conf = _classify_hand(hand_landmarks, idx)
         if conf >= CONFIDENCE_THRESHOLD and conf > best_conf:
             best_gesture, best_conf = gesture, conf

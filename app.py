@@ -5,7 +5,13 @@ import webview
 import threading
 import asyncio
 import json
+
 import os
+os.environ["MEDIAPIPE_DISABLE_GPU"] = "1"
+os.environ["GLOG_minloglevel"] = "3"
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+os.environ["CLEARCUT_OPT_OUT"] = "1"
+
 import sys
 import traceback
 
@@ -228,11 +234,8 @@ def main():
     ws_thread = threading.Thread(target=_start_ws_thread, daemon=True, name="ws-server")
     ws_thread.start()
 
-    def _preload():
-        from src import config       # noqa
-        import src.processor         # noqa  triggers: nlp_engine → from transformers import pipeline
-        import src.tts_engine        # noqa
-    threading.Thread(target=_preload, daemon=True, name="preload").start()
+    # Block here until everything is loaded — window opens ready to go
+    _blocking_preload()
 
     _webview_window = webview.create_window(
         title            = "SOVA",
@@ -246,6 +249,43 @@ def main():
     )
 
     webview.start(debug=False)
+
+
+def _blocking_preload():
+    print("[APP] Loading models — please wait...")
+    try:
+        from src import config
+        import src.tts_engine
+        print("[APP] ✓ Core modules")
+
+        # Load all three MediaPipe models in parallel
+        import concurrent.futures
+        def _load_face():
+            from models.expression import face_mesh
+            return "✓ Face landmarker"
+        def _load_hands():
+            from models.gesture_v4 import detectGesture
+            return "✓ Hand landmarker"
+        def _load_pose():
+            from models.body_action import detectBodyAction
+            return "✓ Pose landmarker"
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=3) as ex:
+            futures = [ex.submit(_load_face), ex.submit(_load_hands), ex.submit(_load_pose)]
+            for f in concurrent.futures.as_completed(futures):
+                print(f"[APP] {f.result()}")
+
+        from models.nlp_engine import _load_model
+        _load_model()
+        print("[APP] ✓ NLP model")
+
+        import src.processor
+        print("[APP] ✓ Processor")
+
+        print("[APP] All models ready — opening window.")
+    except Exception as e:
+        print(f"[APP] Preload error: {e}")
+        traceback.print_exc()
 
 
 if __name__ == "__main__":
