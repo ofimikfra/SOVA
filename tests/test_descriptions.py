@@ -39,9 +39,7 @@ ACTIONS = [
     "Person Present"
 ]
 
-NLP_LABEL = [
-    None, "Positive", "Negative"
-]
+NLP_LABEL = ["positive", "negative", None]
 
 CONF = [
     0.3, 0.65, 0.8, 0.95
@@ -49,11 +47,12 @@ CONF = [
 
 rng = np.random.default_rng()
 
+nlp_label = NLP_LABEL[rng.integers(low=0, high=len(NLP_LABEL))]
+nlp_conf = CONF[rng.integers(low=0, high=len(CONF))] if nlp_label is not None else None
+
 expression = EXPRESSIONS[rng.integers(low=0, high=len(EXPRESSIONS))]
 gesture = GESTURES[rng.integers(low=0, high=len(GESTURES))]
 action = ACTIONS[rng.integers(low=0, high=len(ACTIONS))]
-nlp_label = NLP_LABEL[rng.integers(low=0, high=len(NLP_LABEL))]
-nlp_conf = CONF[rng.integers(low=0, high=len(CONF))] if nlp_label is not None else None
 overall_conf = CONF[rng.integers(low=0, high=len(CONF))]
 
 print(f"\nexpression: {expression}")

@@ -21,7 +21,7 @@ _SYSTEM = (
     "You are objectively describing a person's visible behaviour during a video call. "
     "Write exactly ONE short, factual sentence, maximum 10 words. "
     "Use simple, casual language. "
-    "Describe only what is directly observed — expression, gesture, and body language. "
+    "Describe only what is directly observed."
     "Always include what is given in the observations. "
     "Use speech sentiment only to add light tone context, never to override what is visible. "
     "If the person's mouth is open and there's speech sentiment, assume the person is talking."
@@ -33,6 +33,9 @@ _SYSTEM = (
     "Never mention confidence levels."
     "End cleanly with a single period. "
     "Use only third-person: 'The person', 'They', 'Their'."
+    "If a gesture is provided, use that exact gesture name verbatim in your description. "
+    "Do not assume anything that is not in the observations, such as hands clasping if there is no gesture."
+    "DO not say someone is talking negatively or positively outright. Use sentiment as a SMALL suggestion to their state."
 )
 
 _CONFIDENCE_INSTRUCTION = {
@@ -63,8 +66,12 @@ def _build_prompt(expression: str, gesture: str, action: str,
     tier             = _confidence_tier(overall_conf)
     conf_instruction = _CONFIDENCE_INSTRUCTION[tier]
 
-    gesture_line = f"Gesture: {gesture}" if gesture != "No Gesture" else ""
-    action_line  = f"Body:    {action}"  if action  != "Person Center" else ""
+    # After:
+    gesture_line = (
+        f"Gesture:  {gesture} (use this exact label, do not substitute or paraphrase)"
+        if gesture != "No Gesture" else ""
+    )
+    action_line  = f"Body:    {action}" if action != "Person Center" else ""
 
     # Only include speech if captions were actually present
     speech_line   = ""
@@ -90,12 +97,6 @@ def _build_prompt(expression: str, gesture: str, action: str,
 
 # ── Ollama call ───────────────────────────────────────────────────────────────
 
-_BAD_PHRASES = (
-    "i think", "i feel", "i believe", "i'm not", "i cant", "i can't",
-    "i notice", "confidence", "uncertain", "not sure",
-    "but it", "but their", "but the", "however", "although", "despite", "levels", "level",
-)
-
 _ollama_ready: bool = False
 
 def _call_ollama(prompt: str) -> str | None:
@@ -112,7 +113,7 @@ def _call_ollama(prompt: str) -> str | None:
                 "prompt": prompt,
                 "stream": False,
                 "options": {
-                "temperature": 0.3,   # lower = more rule-following
+                "temperature": 0.1,   # lower = more rule-following
                 "num_predict": 25,    # 12 words ≈ 16 tokens, 25 gives a little room
             },
             },
@@ -220,7 +221,6 @@ def _template_fallback(expression: str, gesture: str,
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
-# TODO: test prompt if body action not passed
 
 def summarize(expression: str, gesture: str, action: str,
               nlp_label: str | None, nlp_conf: float | None,
